@@ -4,7 +4,7 @@ import {inject, injectable} from 'inversify';
 import PlayerManager from '../managers/player.js';
 import Command from './index.js';
 import {SlashCommandBuilder} from '@discordjs/builders';
-import {buildPlayingMessageEmbed} from '../utils/build-embed.js';
+import {buildPlayingMessageEmbed, buildPlayerButtons} from '../utils/build-embed.js';
 
 @injectable()
 export default class implements Command {
@@ -35,10 +35,33 @@ export default class implements Command {
 
     try {
       await player.forward(numToSkip);
-      await interaction.reply({
-        content: 'track skipped',
-        embeds: player.getCurrent() ? [buildPlayingMessageEmbed(player)] : [],
-      });
+      if (player.getCurrent()) {
+        const msg = await interaction.reply({
+          embeds: [buildPlayingMessageEmbed(player)],
+          components: [buildPlayerButtons(player)],
+          fetchReply: true,
+        });
+        const collector = msg.createMessageComponentCollector({time: 5 * 60 * 1000});
+        collector.on('collect', async i => {
+          if (!i.guild) return;
+          const p = this.playerManager.get(i.guild.id);
+          if (i.customId === 'player_pause') {
+            if (p.status === 'playing') { p.pause(); } else { p.resume(); }
+          } else if (i.customId === 'player_skip') {
+            await p.forward(1);
+          } else if (i.customId === 'player_stop') {
+            p.stop();
+          } else if (i.customId === 'player_loop') {
+            p.loopCurrentSong = !p.loopCurrentSong;
+          }
+          await i.update({
+            embeds: p.getCurrent() ? [buildPlayingMessageEmbed(p)] : [],
+            components: p.getCurrent() ? [buildPlayerButtons(p)] : [],
+          });
+        });
+      } else {
+        await interaction.reply('track skipped');
+      }
     } catch (_: unknown) {
       throw new Error('no song to skip to');
     }
