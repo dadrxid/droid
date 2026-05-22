@@ -69,6 +69,7 @@ export default class {
   public guildId: string;
   public loopCurrentSong = false;
   public loopCurrentQueue = false;
+  public nowPlayingMessage: Message | null = null;
   private currentChannel: VoiceChannel | undefined;
   private queue: QueuedSong[] = [];
   private queuePosition = 0;
@@ -86,7 +87,6 @@ export default class {
 
   private readonly channelToSpeakingUsers: Map<string, Set<string>> = new Map();
   private hasRegisteredVoiceActivityListener = false;
-  public nowPlayingMessage: Message | null = null;
 
   constructor(fileCache: FileCacheProvider, guildId: string) {
     this.fileCache = fileCache;
