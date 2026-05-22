@@ -70,6 +70,7 @@ export default class {
   public loopCurrentSong = false;
   public loopCurrentQueue = false;
   public nowPlayingMessage: Message | null = null;
+  private readonly homelabApiUrl = process.env.HOMELAB_API_URL ?? "https://api.droidlab.org";
   private currentChannel: VoiceChannel | undefined;
   private queue: QueuedSong[] = [];
   private queuePosition = 0;
@@ -689,6 +690,23 @@ export default class {
             });
           }
         }
+      }
+
+        // Update homelab API bot status
+        try {
+          await fetch(this.homelabApiUrl + '/status/bot', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+              playing: true,
+              guildId: this.guildId,
+              guild: this.currentChannel?.guild.name ?? 'unknown',
+              song: nextSong.title,
+              artist: nextSong.artist,
+              thumbnail: nextSong.thumbnailUrl ?? '',
+            }),
+          });
+        } catch {}
       }
     }
   }
