@@ -186,7 +186,7 @@ export default class implements Command {
       }
 
       await player.play();
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      await new Promise<void>(resolve => { setTimeout(resolve, 1500); });
 
       // Send now playing embed to the text channel
       const nowPlayingChannel = interaction.channel;
