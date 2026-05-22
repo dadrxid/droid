@@ -21,7 +21,7 @@ import {
 import FileCacheProvider from './file-cache.js';
 import debug from '../utils/debug.js';
 import {getGuildSettings} from '../utils/get-guild-settings.js';
-import {buildPlayingMessageEmbed} from '../utils/build-embed.js';
+import {buildPlayingMessageEmbed, buildPlayerButtons} from '../utils/build-embed.js';
 import {getYouTubeMediaSource} from '../utils/yt-dlp.js';
 import {Setting} from '@prisma/client';
 
@@ -666,10 +666,16 @@ export default class {
       // Auto announce the next song if configured to
       const settings = await getGuildSettings(this.guildId);
       const {autoAnnounceNextSong} = settings;
-      if (autoAnnounceNextSong && this.currentChannel) {
-        await this.currentChannel.send({
-          embeds: this.getCurrent() ? [buildPlayingMessageEmbed(this)] : [],
-        });
+      const nextSong = this.getCurrent();
+      if (autoAnnounceNextSong && nextSong?.addedInChannelId && this.currentChannel) {
+        const textChannel = this.currentChannel.guild.channels.cache.get(nextSong.addedInChannelId);
+        if (textChannel?.isTextBased()) {
+          await textChannel.send({
+            embeds: [buildPlayingMessageEmbed(this)],
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            components: [buildPlayerButtons(this)] as any,
+          });
+        }
       }
     }
   }

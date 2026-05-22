@@ -1,7 +1,6 @@
 import getYouTubeID from 'get-youtube-id';
 import {EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle} from 'discord.js';
 import Player, {MediaSource, QueuedSong, STATUS} from '../services/player.js';
-import getProgressBar from './get-progress-bar.js';
 import {prettyTime} from './time.js';
 import {truncate} from './string.js';
 
@@ -26,6 +25,7 @@ const getSongTitle = ({title, url, offset, source}: QueuedSong, shouldTruncate =
 
 const getQueueInfo = (player: Player) => {
   const queueSize = player.queueSize();
+
   if (queueSize === 0) {
     return '-';
   }
@@ -33,22 +33,9 @@ const getQueueInfo = (player: Player) => {
   return queueSize === 1 ? '1 song' : `${queueSize} songs`;
 };
 
-const getPlayerUI = (player: Player) => {
-  const song = player.getCurrent();
-  if (!song) {
-    return '';
-  }
-
-  const position = player.getPosition();
-  const progressBar = getProgressBar(12, position / song.length);
-  const elapsedTime = song.isLive ? 'live' : `${prettyTime(position)} / ${prettyTime(song.length)}`;
-  const loop = player.loopCurrentSong ? ' · 🔂' : player.loopCurrentQueue ? ' · 🔁' : '';
-  const vol: string = typeof player.getVolume() === 'number' ? ` · 🔉 ${player.getVolume()!}%` : '';
-  return `${progressBar}\n\`${elapsedTime}\`${vol}${loop}`;
-};
-
 export const buildPlayerButtons = (player: Player): ActionRowBuilder<any> => {
   const isPlaying = player.status === STATUS.PLAYING;
+
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId('player_pause')
@@ -75,6 +62,7 @@ export const buildPlayerButtons = (player: Player): ActionRowBuilder<any> => {
 
 export const buildPlayingMessageEmbed = (player: Player): EmbedBuilder => {
   const currentlyPlaying = player.getCurrent();
+
   if (!currentlyPlaying) {
     throw new Error('No playing song found');
   }
@@ -82,13 +70,14 @@ export const buildPlayingMessageEmbed = (player: Player): EmbedBuilder => {
   const {artist, thumbnailUrl, requestedBy} = currentlyPlaying;
   const duration = currentlyPlaying.isLive ? 'live' : prettyTime(currentlyPlaying.length);
   const isPlaying = player.status === STATUS.PLAYING;
+  const loop = player.loopCurrentSong ? ' · 🔂 looping' : player.loopCurrentQueue ? ' · 🔁 queue loop' : '';
+  const vol = typeof player.getVolume() === 'number' ? ` · 🔉 ${player.getVolume()!}%` : '';
 
   const message = new EmbedBuilder()
     .setColor(isPlaying ? 0x00d4ff : 0x00b4a0)
-    .setAuthor({name: isPlaying ? '▶  now playing' : '⏸  paused'})
+    .setAuthor({name: isPlaying ? `▶  now playing${loop}${vol}` : `⏸  paused${loop}${vol}`})
     .setTitle(currentlyPlaying.title.replace(/\[.*\]/u, '').trim())
     .setURL(`https://www.youtube.com/watch?v=${currentlyPlaying.url.length === 11 ? currentlyPlaying.url : getYouTubeID(currentlyPlaying.url) ?? ''}`)
-    .setDescription(getPlayerUI(player))
     .addFields([
       {name: 'artist', value: artist || 'unknown', inline: true},
       {name: 'duration', value: duration, inline: true},
@@ -105,12 +94,14 @@ export const buildPlayingMessageEmbed = (player: Player): EmbedBuilder => {
 
 export const buildQueueEmbed = (player: Player, page: number, pageSize: number): EmbedBuilder => {
   const currentlyPlaying = player.getCurrent();
+
   if (!currentlyPlaying) {
     throw new Error('queue is empty');
   }
 
   const queueSize = player.queueSize();
   const maxQueuePage = Math.ceil((queueSize + 1) / pageSize);
+
   if (page > maxQueuePage) {
     throw new Error('the queue isn\'t that big');
   }
@@ -123,6 +114,7 @@ export const buildQueueEmbed = (player: Player, page: number, pageSize: number):
     .map((song, index) => {
       const songNumber = index + 1 + queuePageBegin;
       const duration = song.isLive ? 'live' : prettyTime(song.length);
+
       return `\`${String(songNumber).padStart(2, '0')}.\` ${getSongTitle(song, true)} \`${duration}\``;
     })
     .join('\n');
@@ -130,16 +122,19 @@ export const buildQueueEmbed = (player: Player, page: number, pageSize: number):
   const {artist, thumbnailUrl, playlist} = currentlyPlaying;
   const playlistTitle = playlist ? ` · ${playlist.title}` : '';
   const totalLength = player.getQueue().reduce((accumulator, current) => accumulator + current.length, 0);
+  const duration = currentlyPlaying.isLive ? 'live' : prettyTime(currentlyPlaying.length);
+  const loop = player.loopCurrentSong ? ' · 🔂' : player.loopCurrentQueue ? ' · 🔁' : '';
 
-  const nowPlayingLine = `**${getSongTitle(currentlyPlaying)}**\n${getPlayerUI(player)}`;
-  let description = `${nowPlayingLine}\n\n`;
+  let description = `**${getSongTitle(currentlyPlaying)}** \`${duration}\`\n`;
+  description += `*${artist || 'unknown artist'}*\n`;
+
   if (player.getQueue().length > 0) {
-    description += `**up next**\n${queuedSongs}`;
+    description += `\n**up next**\n${queuedSongs}`;
   }
 
   const message = new EmbedBuilder()
     .setColor(player.status === STATUS.PLAYING ? 0x00d4ff : 0x0a1520)
-    .setAuthor({name: player.status === STATUS.PLAYING ? '▶  now playing' : '⏸  paused'})
+    .setAuthor({name: player.status === STATUS.PLAYING ? `▶  now playing${loop}` : `⏸  paused${loop}`})
     .setTitle(`queue${playlistTitle}`)
     .setDescription(description)
     .addFields([
@@ -147,7 +142,7 @@ export const buildQueueEmbed = (player: Player, page: number, pageSize: number):
       {name: 'total length', value: totalLength > 0 ? prettyTime(totalLength) : '-', inline: true},
       {name: 'page', value: `${page} of ${maxQueuePage}`, inline: true},
     ])
-    .setFooter({text: `droidlab · ${artist}`});
+    .setFooter({text: 'droidlab'});
 
   if (thumbnailUrl) {
     message.setThumbnail(thumbnailUrl);
