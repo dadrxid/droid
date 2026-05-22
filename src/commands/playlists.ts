@@ -82,7 +82,7 @@ export default class implements Command {
     const embed = new EmbedBuilder()
       .setColor(0x00d4ff)
       .setTitle(isSelf ? 'your playlists' : `${targetUser.username}'s playlists`)
-      .setDescription(playlists.map((p, i) => `\`${i + 1}.\` **${p.name}** · ${p.track_count} track${p.track_count !== 1 ? 's' : ''}`).join('\n'))
+      .setDescription(playlists.map((p, i) => `\`${i + 1}.\` **${p.name}** · ${p.track_count} track${p.track_count === 1 ? '' : 's'}`).join('\n'))
       .setFooter({text: 'droidlab · select a playlist to queue it'});
 
     const select = new StringSelectMenuBuilder()
@@ -90,7 +90,7 @@ export default class implements Command {
       .setPlaceholder('choose a playlist to queue...')
       .addOptions(playlists.map(p => ({
         label: p.name,
-        description: `${p.track_count} track${p.track_count !== 1 ? 's' : ''}`,
+        description: `${p.track_count} track${p.track_count === 1 ? '' : 's'}`,
         value: `${discordId}:${p.name}`,
       })));
 
@@ -169,7 +169,7 @@ export default class implements Command {
         const doneEmbed = new EmbedBuilder()
           .setColor(0x00d4ff)
           .setTitle('playlist queued')
-          .setDescription(`**${playlistName}** — ${tracks.length} track${tracks.length !== 1 ? 's' : ''} added to the queue`)
+          .setDescription(`**${playlistName}** — ${tracks.length} track${tracks.length === 1 ? '' : 's'} added to the queue`)
           .setFooter({text: 'droidlab'});
 
         await interaction.editReply({embeds: [doneEmbed], components: []});
@@ -180,7 +180,7 @@ export default class implements Command {
         const doneEmbed = new EmbedBuilder()
           .setColor(0x00d4ff)
           .setTitle('now playing playlist')
-          .setDescription(`**${playlistName}** — ${tracks.length} track${tracks.length !== 1 ? 's' : ''}`)
+          .setDescription(`**${playlistName}** — ${tracks.length} track${tracks.length === 1 ? '' : 's'}`)
           .setFooter({text: 'droidlab'});
 
         await interaction.editReply({embeds: [doneEmbed], components: []});
