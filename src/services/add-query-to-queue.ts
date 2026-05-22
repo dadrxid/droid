@@ -97,7 +97,8 @@ export default class AddQueryToQueue {
     if (!wasPlayingSong) {
       await interaction.editReply({
         embeds: [buildPlayingMessageEmbed(player)],
-        components: [buildPlayerButtons(player)],
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        components: [buildPlayerButtons(player)] as any,
       });
 
       return;

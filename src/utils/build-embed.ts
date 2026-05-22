@@ -51,7 +51,8 @@ const getPlayerUI = (player: Player) => {
   return `${button} ${progressBar} \`[${elapsedTime}]\` 🔉 ${vol} ${loop}`;
 };
 
-export const buildPlayerButtons = (player: Player): ActionRowBuilder<ButtonBuilder> => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const buildPlayerButtons = (player: Player): ActionRowBuilder<any> => {
   const isPlaying = player.status === STATUS.PLAYING;
 
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -133,7 +134,7 @@ export const buildQueueEmbed = (player: Player, page: number, pageSize: number):
     })
     .join('\n');
 
-  const {artist, thumbnailUrl, playlist, requestedBy} = currentlyPlaying;
+  const {artist, thumbnailUrl, playlist, requestedBy: _requestedBy} = currentlyPlaying;
   const playlistTitle = playlist ? `(${playlist.title})` : '';
   const totalLength = player.getQueue().reduce((accumulator, current) => accumulator + current.length, 0);
   const message = new EmbedBuilder();

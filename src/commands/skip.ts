@@ -45,7 +45,8 @@ export default class implements Command {
 
       const msg = await interaction.reply({
         embeds: [buildPlayingMessageEmbed(player)],
-        components: [buildPlayerButtons(player)],
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        components: [buildPlayerButtons(player)] as any,
         fetchReply: true,
       });
 
@@ -62,10 +63,10 @@ export default class implements Command {
           if (p.status === STATUS.PLAYING) {
             p.pause();
           } else {
-            p.resume();
+            p.unpause();
           }
         } else if (i.customId === 'player_skip') {
-          await p.forward(1);
+          void p.forward(1);
         } else if (i.customId === 'player_stop') {
           p.stop();
         } else if (i.customId === 'player_loop') {
@@ -74,7 +75,8 @@ export default class implements Command {
 
         await i.update({
           embeds: p.getCurrent() ? [buildPlayingMessageEmbed(p)] : [],
-          components: p.getCurrent() ? [buildPlayerButtons(p)] : [],
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          components: p.getCurrent() ? [buildPlayerButtons(p)] as any : [],
         });
       });
     } catch (_: unknown) {
