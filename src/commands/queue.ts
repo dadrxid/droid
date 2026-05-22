@@ -29,23 +29,6 @@ export default class implements Command {
     this.playerManager = playerManager;
   }
 
-  private buildPageButtons(currentPage: number, maxPage: number) {
-    return new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId('queue_prev')
-        .setEmoji('⬅️')
-        .setLabel('Prev')
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(currentPage <= 1),
-      new ButtonBuilder()
-        .setCustomId('queue_next')
-        .setEmoji('➡️')
-        .setLabel('Next')
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(currentPage >= maxPage),
-    );
-  }
-
   public async execute(interaction: ChatInputCommandInteraction) {
     const guildId = interaction.guild!.id;
     const player = this.playerManager.get(guildId);
@@ -65,7 +48,9 @@ export default class implements Command {
       fetchReply: true,
     });
 
-    if (maxPage <= 1) return;
+    if (maxPage <= 1) {
+      return;
+    }
 
     const collector = msg.createMessageComponentCollector({time: 5 * 60 * 1000});
 
@@ -90,5 +75,22 @@ export default class implements Command {
         await msg.edit({components: []});
       } catch {}
     });
+  }
+
+  private buildPageButtons(currentPage: number, maxPage: number) {
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId('queue_prev')
+        .setEmoji('⬅️')
+        .setLabel('Prev')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(currentPage <= 1),
+      new ButtonBuilder()
+        .setCustomId('queue_next')
+        .setEmoji('➡️')
+        .setLabel('Next')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(currentPage >= maxPage),
+    );
   }
 }
