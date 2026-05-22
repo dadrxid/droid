@@ -80,7 +80,7 @@ export default class implements Command {
     }
 
     try {
-      new URL(query);
+      const _u = new URL(query); void _u;
       await interaction.respond([]);
 
       return;

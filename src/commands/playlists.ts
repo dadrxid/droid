@@ -199,7 +199,7 @@ export default class implements Command {
 
       const doneEmbed = new EmbedBuilder()
         .setColor(0x00d4ff)
-        .setAuthor({name: `now queuing`})
+        .setAuthor({name: 'now queuing'})
         .setTitle(`${playlistName}`)
         .setDescription(`${preview}${extra}`)
         .addFields({name: '\u200b', value: `\`${tracks.length}\` tracks · \`${pages}\` page${pages === 1 ? '' : 's'}`})
