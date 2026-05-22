@@ -166,7 +166,7 @@ export default class {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({playing: false, guildId: this.guildId, guild: '', song: null, artist: null, thumbnail: null}),
-      }).catch(() => {});
+      }).catch(() => { /* ignore */ });
     }
   }
 
@@ -320,7 +320,7 @@ export default class {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({playing: false, guildId: this.guildId, guild: '', song: null, artist: null, thumbnail: null}),
-        }).catch(() => {});
+        }).catch(() => { /* ignore */ });
 
         const settings = await getGuildSettings(this.guildId);
 
