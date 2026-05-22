@@ -159,6 +159,14 @@ export default class {
       this.currentChannel = undefined;
       this.channelToSpeakingUsers.clear();
       this.hasRegisteredVoiceActivityListener = false;
+      this.nowPlayingMessage = null;
+
+      // Post idle status to homelab API
+      fetch(this.homelabApiUrl + '/status/bot', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({playing: false, guildId: this.guildId, guild: '', song: null, artist: null, thumbnail: null}),
+      }).catch(() => {});
     }
   }
 
@@ -306,6 +314,13 @@ export default class {
       } else {
         this.status = STATUS.IDLE;
         this.audioPlayer?.stop(true);
+
+        // Post idle status to homelab API
+        fetch(this.homelabApiUrl + '/status/bot', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({playing: false, guildId: this.guildId, guild: '', song: null, artist: null, thumbnail: null}),
+        }).catch(() => {});
 
         const settings = await getGuildSettings(this.guildId);
 
