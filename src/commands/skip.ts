@@ -39,6 +39,7 @@ export default class implements Command {
 
       if (!player.getCurrent()) {
         await interaction.reply({content: 'track skipped'});
+
         return;
       }
 
@@ -54,7 +55,9 @@ export default class implements Command {
         if (!i.guild) {
           return;
         }
+
         const p = this.playerManager.get(i.guild.id);
+
         if (i.customId === 'player_pause') {
           if (p.status === STATUS.PLAYING) {
             p.pause();
@@ -68,6 +71,7 @@ export default class implements Command {
         } else if (i.customId === 'player_loop') {
           p.loopCurrentSong = !p.loopCurrentSong;
         }
+
         await i.update({
           embeds: p.getCurrent() ? [buildPlayingMessageEmbed(p)] : [],
           components: p.getCurrent() ? [buildPlayerButtons(p)] : [],

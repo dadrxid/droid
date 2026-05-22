@@ -3,7 +3,7 @@ import {inject, injectable} from 'inversify';
 import shuffle from 'array-shuffle';
 import {TYPES} from '../types.js';
 import GetSongs from '../services/get-songs.js';
-import {MediaSource, SongMetadata, STATUS} from './player.js';
+import {MediaSource, SongMetadata} from './player.js';
 import PlayerManager from '../managers/player.js';
 import {buildPlayingMessageEmbed, buildPlayerButtons} from '../utils/build-embed.js';
 import {getMemberVoiceChannel, getMostPopularVoiceChannel} from '../utils/channels.js';
@@ -58,7 +58,7 @@ export default class AddQueryToQueue {
 
     await interaction.deferReply({ephemeral: queueAddResponseEphemeral});
 
-    let [newSongs, extraMsg] = await this.getSongs.getSongs(query, playlistLimit, shouldSplitChapters);
+    let [newSongs, _extraMsg] = await this.getSongs.getSongs(query, playlistLimit, shouldSplitChapters);
 
     if (newSongs.length === 0) {
       throw new Error('no songs found');
@@ -86,7 +86,7 @@ export default class AddQueryToQueue {
     }
 
     if (skipCurrentTrack) {
-      player.forward(1);
+      void player.forward(1);
     }
 
     const firstSong = newSongs[0];
@@ -99,34 +99,38 @@ export default class AddQueryToQueue {
         embeds: [buildPlayingMessageEmbed(player)],
         components: [buildPlayerButtons(player)],
       });
+
       return;
     }
 
     if (newSongs.length === 1) {
       const embed = new EmbedBuilder()
         .setColor(0x00d4ff)
-        .setTitle('📋  track queued')
-        .setDescription(`**${firstSong.title}**`)
+        .setTitle('Track Queued')
+        .setDescription(`${firstSong.title}`)
         .addFields([
-          {name: 'position', value: `#${position}`, inline: true},
-          {name: 'duration', value: duration, inline: true},
+          {name: 'Position', value: `#${position}`, inline: true},
+          {name: 'Duration', value: duration, inline: true},
         ])
         .setFooter({text: `droidlab · ${firstSong.artist ?? 'unknown'}`});
+
       if (firstSong.thumbnailUrl) {
         embed.setThumbnail(firstSong.thumbnailUrl);
       }
+
       await interaction.editReply({embeds: [embed]});
     } else {
       const totalDuration = newSongs.reduce((acc, s) => acc + s.length, 0);
       const embed = new EmbedBuilder()
         .setColor(0x00d4ff)
-        .setTitle('📋  playlist queued')
+        .setTitle('Playlist Queued')
         .setDescription(`**${firstSong.title}** and **${newSongs.length - 1}** other tracks`)
         .addFields([
-          {name: 'tracks', value: `${newSongs.length}`, inline: true},
-          {name: 'total duration', value: prettyTime(totalDuration), inline: true},
+          {name: 'Tracks', value: `${newSongs.length}`, inline: true},
+          {name: 'Total Duration', value: prettyTime(totalDuration), inline: true},
         ])
         .setFooter({text: 'droidlab'});
+
       await interaction.editReply({embeds: [embed]});
     }
   }
@@ -138,6 +142,7 @@ export default class AddQueryToQueue {
           || !song.url) {
       return song;
     }
+
     try {
       const segments = await this.cache.wrap(
         async () => this.sponsorBlock?.getSegments(song.url, ['music_offtopic']),
@@ -150,34 +155,44 @@ export default class AddQueryToQueue {
         .sort((a, b) => a.startTime - b.startTime)
         .reduce((acc: Array<{startTime: number; endTime: number}>, {startTime, endTime}) => {
           const previousSegment = acc[acc.length - 1];
+
           if (previousSegment && previousSegment.endTime > startTime) {
             acc[acc.length - 1].endTime = endTime;
           } else {
             acc.push({startTime, endTime});
           }
+
           return acc;
         }, []);
+
       const intro = skipSegments[0];
       const outro = skipSegments.at(-1);
+
       if (outro && outro?.endTime >= song.length - 2) {
         song.length -= outro.endTime - outro.startTime;
       }
+
       if (intro?.startTime <= 2) {
         song.offset = Math.floor(intro.endTime);
         song.length -= song.offset;
       }
+
       return song;
     } catch (e) {
       if (!(e instanceof Error)) {
         console.error('Unexpected event occurred while fetching skip segments : ', e);
+
         return song;
       }
+
       if (!e.message.includes('404')) {
         console.warn(`Could not fetch skip segments for "${song.url}" :`, e);
       }
+
       if (e.message.includes('504')) {
         this.sponsorBlockDisabledUntil = new Date(new Date().getTime() + (this.sponsorBlockTimeoutDelay * 60_000));
       }
+
       return song;
     }
   }
