@@ -24,7 +24,7 @@ export default class implements Command {
     const player = this.playerManager.get(interaction.guild!.id);
 
     if (!player.voiceConnection) {
-      throw new Error('not connected');
+      throw new Error('not in a voice channel');
     }
 
     if (player.status !== STATUS.PLAYING) {
