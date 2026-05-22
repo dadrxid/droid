@@ -1,4 +1,4 @@
-import {ChatInputCommandInteraction} from 'discord.js';
+import {ChatInputCommandInteraction, EmbedBuilder} from 'discord.js';
 import {SlashCommandBuilder} from '@discordjs/builders';
 import {TYPES} from '../types.js';
 import {inject, injectable} from 'inversify';
@@ -9,7 +9,7 @@ import Command from './index.js';
 export default class implements Command {
   public readonly slashCommand = new SlashCommandBuilder()
     .setName('disconnect')
-    .setDescription('pause and disconnect Muse');
+    .setDescription('pause and disconnect droid');
 
   public requiresVC = true;
 
@@ -28,6 +28,13 @@ export default class implements Command {
 
     player.disconnect();
 
-    await interaction.reply('disconnected');
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x0a1520)
+          .setDescription('👋  **disconnected**')
+          .setFooter({text: 'droidlab'}),
+      ],
+    });
   }
 }

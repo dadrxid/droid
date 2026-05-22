@@ -1,4 +1,4 @@
-import {ChatInputCommandInteraction} from 'discord.js';
+import {ChatInputCommandInteraction, EmbedBuilder} from 'discord.js';
 import {SlashCommandBuilder} from '@discordjs/builders';
 import {TYPES} from '../types.js';
 import {inject, injectable} from 'inversify';
@@ -32,6 +32,14 @@ export default class implements Command {
     }
 
     player.stop();
-    await interaction.reply('stopped');
+
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x0a1520)
+          .setDescription('⏹  **stopped**')
+          .setFooter({text: 'droidlab'}),
+      ],
+    });
   }
 }

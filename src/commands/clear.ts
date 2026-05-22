@@ -1,5 +1,5 @@
 import {inject, injectable} from 'inversify';
-import {ChatInputCommandInteraction} from 'discord.js';
+import {ChatInputCommandInteraction, EmbedBuilder} from 'discord.js';
 import {SlashCommandBuilder} from '@discordjs/builders';
 import {TYPES} from '../types.js';
 import PlayerManager from '../managers/player.js';
@@ -22,6 +22,13 @@ export default class implements Command {
   public async execute(interaction: ChatInputCommandInteraction) {
     this.playerManager.get(interaction.guild!.id).clear();
 
-    await interaction.reply('queue cleared');
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x0a1520)
+          .setDescription('🗑️  **queue cleared**')
+          .setFooter({text: 'droidlab'}),
+      ],
+    });
   }
 }
