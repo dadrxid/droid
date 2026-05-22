@@ -5,6 +5,7 @@ import {TYPES} from '../types.js';
 import Command from './index.js';
 import PlayerManager from '../managers/player.js';
 import {getMemberVoiceChannel, getMostPopularVoiceChannel} from '../utils/channels.js';
+import {buildPlayingMessageEmbed, buildPlayerButtons} from '../utils/build-embed.js';
 import {prettyTime} from '../utils/time.js';
 
 const PLAYLIST_API = process.env.PLAYLIST_API_URL ?? 'https://playlist.droidlab.org';
@@ -185,6 +186,16 @@ export default class implements Command {
       }
 
       void player.play();
+
+      // Send now playing embed to the text channel
+      const nowPlayingChannel = interaction.channel;
+      if (nowPlayingChannel?.isTextBased()) {
+        await nowPlayingChannel.send({
+          embeds: [buildPlayingMessageEmbed(player)],
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          components: [buildPlayerButtons(player)] as any,
+        });
+      }
 
       const pageSize = 10;
       const maxPage = Math.ceil(tracks.length / pageSize);
