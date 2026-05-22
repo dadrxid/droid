@@ -70,7 +70,7 @@ export default class {
   public loopCurrentSong = false;
   public loopCurrentQueue = false;
   public nowPlayingMessage: Message | null = null;
-  private readonly homelabApiUrl = process.env.HOMELAB_API_URL ?? "https://api.droidlab.org";
+  private readonly homelabApiUrl = process.env.HOMELAB_API_URL ?? 'https://api.droidlab.org';
   private currentChannel: VoiceChannel | undefined;
   private queue: QueuedSong[] = [];
   private queuePosition = 0;
