@@ -44,7 +44,7 @@ export default class implements Command {
 
     const msg = await interaction.reply({
       embeds: [embed],
-      components: maxPage > 1 ? [buttons.toJSON()] : [],
+      components: maxPage > 1 ? [buttons] : [],
       fetchReply: true,
     });
 
@@ -66,7 +66,7 @@ export default class implements Command {
 
       await i.update({
         embeds: [newEmbed],
-        components: [newButtons.toJSON()],
+        components: [newButtons],
       });
     });
 
