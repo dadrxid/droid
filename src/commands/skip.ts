@@ -63,7 +63,7 @@ export default class implements Command {
           if (p.status === STATUS.PLAYING) {
             p.pause();
           } else {
-            p.unpause();
+            p.play();
           }
         } else if (i.customId === 'player_skip') {
           void p.forward(1);
