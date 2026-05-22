@@ -44,6 +44,7 @@ export default class implements Command {
 
     const msg = await interaction.reply({
       embeds: [embed],
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       components: maxPage > 1 ? [buttons] as any : [],
       fetchReply: true,
     });
@@ -66,6 +67,7 @@ export default class implements Command {
 
       await i.update({
         embeds: [newEmbed],
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         components: [newButtons] as any,
       });
     });
