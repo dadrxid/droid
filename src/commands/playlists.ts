@@ -5,6 +5,7 @@ import {TYPES} from '../types.js';
 import Command from './index.js';
 import PlayerManager from '../managers/player.js';
 import {getMemberVoiceChannel, getMostPopularVoiceChannel} from '../utils/channels.js';
+import {prettyTime} from '../utils/time.js';
 
 const PLAYLIST_API = process.env.PLAYLIST_API_URL ?? 'https://playlist.droidlab.org';
 
@@ -31,7 +32,7 @@ export default class implements Command {
     const discordId = targetUser.id;
     const isSelf = targetUser.id === interaction.user.id;
 
-    await interaction.deferReply();
+    await interaction.deferReply({ephemeral: true});
 
     let playlists: Array<{id: number; name: string; track_count: number}> = [];
 
@@ -44,10 +45,8 @@ export default class implements Command {
           .setLabel('open playlist.droidlab.org')
           .setURL('https://playlist.droidlab.org')
           .setStyle(ButtonStyle.Link);
-
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         const row = new ActionRowBuilder<ButtonBuilder>().addComponents(websiteBtn) as any;
-
         await interaction.editReply({
           embeds: [
             new EmbedBuilder()
@@ -80,10 +79,8 @@ export default class implements Command {
         .setLabel('open playlist.droidlab.org')
         .setURL('https://playlist.droidlab.org')
         .setStyle(ButtonStyle.Link);
-
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const row = new ActionRowBuilder<ButtonBuilder>().addComponents(websiteBtn) as any;
-
       await interaction.editReply({
         embeds: [
           new EmbedBuilder()
@@ -99,7 +96,6 @@ export default class implements Command {
       return;
     }
 
-    // Deduplicate by id, truncate to 25 for Discord limit
     const unique = Array.from(new Map(playlists.map(p => [p.id, p])).values()).slice(0, 25);
 
     const embed = new EmbedBuilder()
@@ -191,19 +187,20 @@ export default class implements Command {
 
       void player.play();
 
-      const preview = tracks.slice(0, 10).map((t, idx) =>
-        `\`${String(idx + 1).padStart(2, ' ')}.\` ${t.title}${t.artist ? ` — ${t.artist}` : ''}`,
-      ).join('\n');
-      const extra = tracks.length > 10 ? `\n\`    \` *and ${tracks.length - 10} more...*` : '';
+      // Build preview styled like the reference — numbered with artist tags
+      const totalDuration = tracks.reduce((acc, t) => acc + (t.duration ?? 0), 0);
       const pages = Math.ceil(tracks.length / 10);
+      const preview = tracks.slice(0, 10).map((t, idx) => {
+        const artist = t.artist ? ` — **${t.artist}**` : '';
+        return `${idx + 1}. ${t.title}${artist}`;
+      }).join('\n');
+      const extra = tracks.length > 10 ? `\nAnd ${tracks.length - 10} more...` : '';
 
       const doneEmbed = new EmbedBuilder()
         .setColor(0x00d4ff)
-        .setAuthor({name: 'now queuing'})
-        .setTitle(`${playlistName}`)
+        .setTitle(`Playlist "${playlistName}" — ${tracks.length} song${tracks.length === 1 ? '' : 's'} — ${prettyTime(totalDuration)}`)
         .setDescription(`${preview}${extra}`)
-        .addFields({name: '\u200b', value: `\`${tracks.length}\` tracks · \`${pages}\` page${pages === 1 ? '' : 's'}`})
-        .setFooter({text: 'droidlab'});
+        .setFooter({text: `droidlab · page 1 of ${pages}`});
 
       await interaction.editReply({embeds: [doneEmbed], components: []});
       collector.stop();

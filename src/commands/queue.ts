@@ -1,4 +1,4 @@
-import {ChatInputCommandInteraction} from 'discord.js';
+import {ChatInputCommandInteraction, ActionRowBuilder, ButtonBuilder, ButtonStyle} from 'discord.js';
 import {SlashCommandBuilder} from '@discordjs/builders';
 import {inject, injectable} from 'inversify';
 import {TYPES} from '../types.js';
@@ -29,19 +29,66 @@ export default class implements Command {
     this.playerManager = playerManager;
   }
 
+  private buildPageButtons(currentPage: number, maxPage: number) {
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId('queue_prev')
+        .setEmoji('⬅️')
+        .setLabel('Prev')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(currentPage <= 1),
+      new ButtonBuilder()
+        .setCustomId('queue_next')
+        .setEmoji('➡️')
+        .setLabel('Next')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(currentPage >= maxPage),
+    );
+  }
+
   public async execute(interaction: ChatInputCommandInteraction) {
     const guildId = interaction.guild!.id;
     const player = this.playerManager.get(guildId);
-
     const pageSizeFromOptions = interaction.options.getInteger('page-size');
     const pageSize = pageSizeFromOptions ?? (await getGuildSettings(guildId)).defaultQueuePageSize;
 
-    const embed = buildQueueEmbed(
-      player,
-      interaction.options.getInteger('page') ?? 1,
-      pageSize,
-    );
+    let currentPage = interaction.options.getInteger('page') ?? 1;
+    const queueSize = player.queueSize();
+    const maxPage = Math.ceil((queueSize + 1) / pageSize);
 
-    await interaction.reply({embeds: [embed]});
+    const embed = buildQueueEmbed(player, currentPage, pageSize);
+    const buttons = this.buildPageButtons(currentPage, maxPage);
+
+    const msg = await interaction.reply({
+      embeds: [embed],
+      components: maxPage > 1 ? [buttons] : [],
+      fetchReply: true,
+    });
+
+    if (maxPage <= 1) return;
+
+    const collector = msg.createMessageComponentCollector({time: 5 * 60 * 1000});
+
+    collector.on('collect', async i => {
+      if (i.customId === 'queue_prev' && currentPage > 1) {
+        currentPage--;
+      } else if (i.customId === 'queue_next' && currentPage < maxPage) {
+        currentPage++;
+      }
+
+      const newEmbed = buildQueueEmbed(player, currentPage, pageSize);
+      const newButtons = this.buildPageButtons(currentPage, maxPage);
+
+      await i.update({
+        embeds: [newEmbed],
+        components: [newButtons],
+      });
+    });
+
+    collector.on('end', async () => {
+      try {
+        await msg.edit({components: []});
+      } catch {}
+    });
   }
 }
