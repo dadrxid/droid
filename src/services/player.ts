@@ -665,10 +665,10 @@ export default class {
 
     if (newState.status === AudioPlayerStatus.Idle && this.status === STATUS.PLAYING) {
       await this.forward(1);
-      // Auto announce the next song if configured to
       const settings = await getGuildSettings(this.guildId);
       const {autoAnnounceNextSong} = settings;
       const nextSong = this.getCurrent();
+
       if (autoAnnounceNextSong && nextSong?.addedInChannelId && this.currentChannel) {
         if (this.nowPlayingMessage) {
           try {
@@ -692,7 +692,7 @@ export default class {
         }
       }
 
-        // Update homelab API bot status
+      if (nextSong) {
         try {
           await fetch(this.homelabApiUrl + '/status/bot', {
             method: 'POST',
