@@ -191,7 +191,6 @@ export default class implements Command {
       let currentPage = 1;
 
       const doneEmbed = this.buildTrackEmbed(tracks, playlistName, currentPage, pageSize);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const pageButtons: any[] = maxPage > 1 ? [this.buildPageButtons(currentPage, maxPage)] : [];
 
       await interaction.editReply({embeds: [doneEmbed], components: pageButtons});
@@ -223,7 +222,6 @@ export default class implements Command {
         }
 
         const newEmbed = this.buildTrackEmbed(tracks, playlistName, currentPage, pageSize);
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         const newButtons: any[] = [this.buildPageButtons(currentPage, maxPage)];
         await btn.update({embeds: [newEmbed], components: newButtons});
       });

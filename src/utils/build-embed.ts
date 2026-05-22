@@ -8,6 +8,7 @@ import {truncate} from './string.js';
 const getMaxSongTitleLength = (title: string) => {
   // eslint-disable-next-line no-control-regex
   const nonASCII = /[^\u0000-\u007F]+/u;
+
   return nonASCII.test(title) ? 28 : 48;
 };
 
@@ -18,6 +19,7 @@ const getSongTitle = ({title, url, offset, source}: QueuedSong, shouldTruncate =
   const cleanSongTitle = title.replace(/\[.*\]/u, '').trim();
   const songTitle = shouldTruncate ? truncate(cleanSongTitle, getMaxSongTitleLength(cleanSongTitle)) : cleanSongTitle;
   const youtubeId = url.length === 11 ? url : getYouTubeID(url) ?? '';
+
   return `[${songTitle}](https://www.youtube.com/watch?v=${youtubeId}${offset === 0 ? '' : '&t=' + String(offset)})`;
 };
 
@@ -26,6 +28,7 @@ const getQueueInfo = (player: Player) => {
   if (queueSize === 0) {
     return '-';
   }
+
   return queueSize === 1 ? '1 song' : `${queueSize} songs`;
 };
 
@@ -93,6 +96,7 @@ export const buildPlayingMessageEmbed = (player: Player): EmbedBuilder => {
   if (thumbnailUrl) {
     message.setThumbnail(thumbnailUrl);
   }
+
 
   return message;
 };
