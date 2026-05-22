@@ -16,6 +16,7 @@ const getSongTitle = ({title, url, offset, source}: QueuedSong, shouldTruncate =
   if (source === MediaSource.HLS) {
     return `[${title}](${url})`;
   }
+
   const cleanSongTitle = title.replace(/\[.*\]/u, '').trim();
   const songTitle = shouldTruncate ? truncate(cleanSongTitle, getMaxSongTitleLength(cleanSongTitle)) : cleanSongTitle;
   const youtubeId = url.length === 11 ? url : getYouTubeID(url) ?? '';
@@ -37,6 +38,7 @@ const getPlayerUI = (player: Player) => {
   if (!song) {
     return '';
   }
+
   const position = player.getPosition();
   const progressBar = getProgressBar(12, position / song.length);
   const elapsedTime = song.isLive ? 'live' : `${prettyTime(position)} / ${prettyTime(song.length)}`;
@@ -76,6 +78,7 @@ export const buildPlayingMessageEmbed = (player: Player): EmbedBuilder => {
   if (!currentlyPlaying) {
     throw new Error('No playing song found');
   }
+
   const {artist, thumbnailUrl, requestedBy} = currentlyPlaying;
   const duration = currentlyPlaying.isLive ? 'live' : prettyTime(currentlyPlaying.length);
   const isPlaying = player.status === STATUS.PLAYING;
@@ -97,7 +100,6 @@ export const buildPlayingMessageEmbed = (player: Player): EmbedBuilder => {
     message.setThumbnail(thumbnailUrl);
   }
 
-
   return message;
 };
 
@@ -106,6 +108,7 @@ export const buildQueueEmbed = (player: Player, page: number, pageSize: number):
   if (!currentlyPlaying) {
     throw new Error('queue is empty');
   }
+
   const queueSize = player.queueSize();
   const maxQueuePage = Math.ceil((queueSize + 1) / pageSize);
   if (page > maxQueuePage) {
