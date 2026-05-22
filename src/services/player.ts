@@ -1,4 +1,4 @@
-import {VoiceChannel, Snowflake} from 'discord.js';
+import {VoiceChannel, Snowflake, Message} from 'discord.js';
 import {Readable} from 'stream';
 import {setTimeout as sleep} from 'timers/promises';
 import hasha from 'hasha';
@@ -86,6 +86,7 @@ export default class {
 
   private readonly channelToSpeakingUsers: Map<string, Set<string>> = new Map();
   private hasRegisteredVoiceActivityListener = false;
+  public nowPlayingMessage: Message | null = null;
 
   constructor(fileCache: FileCacheProvider, guildId: string) {
     this.fileCache = fileCache;
@@ -668,13 +669,25 @@ export default class {
       const {autoAnnounceNextSong} = settings;
       const nextSong = this.getCurrent();
       if (autoAnnounceNextSong && nextSong?.addedInChannelId && this.currentChannel) {
-        const textChannel = this.currentChannel.guild.channels.cache.get(nextSong.addedInChannelId);
-        if (textChannel?.isTextBased()) {
-          await textChannel.send({
-            embeds: [buildPlayingMessageEmbed(this)],
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-            components: [buildPlayerButtons(this)] as any,
-          });
+        if (this.nowPlayingMessage) {
+          try {
+            await this.nowPlayingMessage.edit({
+              embeds: [buildPlayingMessageEmbed(this)],
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+              components: [buildPlayerButtons(this)] as any,
+            });
+          } catch {
+            this.nowPlayingMessage = null;
+          }
+        } else {
+          const textChannel = this.currentChannel.guild.channels.cache.get(nextSong.addedInChannelId);
+          if (textChannel?.isTextBased()) {
+            this.nowPlayingMessage = await textChannel.send({
+              embeds: [buildPlayingMessageEmbed(this)],
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+              components: [buildPlayerButtons(this)] as any,
+            });
+          }
         }
       }
     }

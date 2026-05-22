@@ -190,7 +190,7 @@ export default class implements Command {
       // Send now playing embed to the text channel
       const nowPlayingChannel = interaction.channel;
       if (nowPlayingChannel?.isTextBased()) {
-        await nowPlayingChannel.send({
+        player.nowPlayingMessage = await nowPlayingChannel.send({
           embeds: [buildPlayingMessageEmbed(player)],
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           components: [buildPlayerButtons(player)] as any,
