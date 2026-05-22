@@ -3,7 +3,7 @@ import {inject, injectable} from 'inversify';
 import shuffle from 'array-shuffle';
 import {TYPES} from '../types.js';
 import GetSongs from '../services/get-songs.js';
-import {MediaSource, SongMetadata} from './player.js';
+import {MediaSource, SongMetadata, STATUS} from './player.js';
 import PlayerManager from '../managers/player.js';
 import {buildPlayingMessageEmbed, buildPlayerButtons} from '../utils/build-embed.js';
 import {getMemberVoiceChannel, getMostPopularVoiceChannel} from '../utils/channels.js';
@@ -95,10 +95,40 @@ export default class AddQueryToQueue {
     const duration = firstSong.isLive ? 'live' : prettyTime(firstSong.length);
 
     if (!wasPlayingSong) {
-      await interaction.editReply({
+      const msg = await interaction.editReply({
         embeds: [buildPlayingMessageEmbed(player)],
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         components: [buildPlayerButtons(player)] as any,
+      });
+
+      const collector = msg.createMessageComponentCollector({time: 5 * 60 * 1000});
+
+      collector.on('collect', async i => {
+        if (!i.guild) {
+          return;
+        }
+
+        const p = this.playerManager.get(i.guild.id);
+
+        if (i.customId === 'player_pause') {
+          if (p.status === STATUS.PLAYING) {
+            p.pause();
+          } else {
+            p.play();
+          }
+        } else if (i.customId === 'player_skip') {
+          void p.forward(1);
+        } else if (i.customId === 'player_stop') {
+          p.stop();
+        } else if (i.customId === 'player_loop') {
+          p.loopCurrentSong = !p.loopCurrentSong;
+        }
+
+        await i.update({
+          embeds: p.getCurrent() ? [buildPlayingMessageEmbed(p)] : [],
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          components: p.getCurrent() ? [buildPlayerButtons(p)] as any : [],
+        });
       });
 
       return;
