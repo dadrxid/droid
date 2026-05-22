@@ -1,4 +1,4 @@
-import {ChatInputCommandInteraction, GuildMember} from 'discord.js';
+import {ChatInputCommandInteraction, EmbedBuilder, GuildMember} from 'discord.js';
 import {inject, injectable} from 'inversify';
 import shuffle from 'array-shuffle';
 import {TYPES} from '../types.js';
@@ -12,6 +12,7 @@ import {SponsorBlock} from 'sponsorblock-api';
 import Config from './config.js';
 import KeyValueCacheProvider from './key-value-cache.js';
 import {ONE_HOUR_IN_SECONDS} from '../utils/constants.js';
+import {prettyTime} from '../utils/time.js';
 
 @injectable()
 export default class AddQueryToQueue {
@@ -26,7 +27,7 @@ export default class AddQueryToQueue {
     @inject(TYPES.KeyValueCache) cache: KeyValueCacheProvider) {
     this.sponsorBlockTimeoutDelay = config.SPONSORBLOCK_TIMEOUT;
     this.sponsorBlock = config.ENABLE_SPONSORBLOCK
-      ? new SponsorBlock('muse-sb-integration') // UserID matters only for submissions
+      ? new SponsorBlock('muse-sb-integration')
       : undefined;
     this.cache = cache;
   }
@@ -53,7 +54,6 @@ export default class AddQueryToQueue {
     const [targetVoiceChannel] = getMemberVoiceChannel(interaction.member as GuildMember) ?? getMostPopularVoiceChannel(interaction.guild!);
 
     const settings = await getGuildSettings(guildId);
-
     const {playlistLimit, queueAddResponseEphemeral} = settings;
 
     await interaction.deferReply({ephemeral: queueAddResponseEphemeral});
@@ -80,53 +80,53 @@ export default class AddQueryToQueue {
       }, {immediate: addToFrontOfQueue ?? false});
     });
 
-    const firstSong = newSongs[0];
-
-    let statusMsg = '';
-
-    if (player.voiceConnection === null) {
+    if (!wasPlayingSong) {
       await player.connect(targetVoiceChannel);
-
-      // Resume / start playback
-      await player.play();
-
-      if (wasPlayingSong) {
-        statusMsg = 'resuming playback';
-      }
-
-      await interaction.editReply({
-        embeds: [buildPlayingMessageEmbed(player)],
-      });
-    } else if (player.status === STATUS.IDLE) {
-      // Player is idle, start playback instead
-      await player.play();
+      player.play();
     }
 
     if (skipCurrentTrack) {
-      try {
-        await player.forward(1);
-      } catch (_: unknown) {
-        throw new Error('no song to skip to');
-      }
+      player.forward(1);
     }
 
-    // Build response message
-    if (statusMsg !== '') {
-      if (extraMsg === '') {
-        extraMsg = statusMsg;
-      } else {
-        extraMsg = `${statusMsg}, ${extraMsg}`;
-      }
-    }
-
-    if (extraMsg !== '') {
-      extraMsg = ` (${extraMsg})`;
-    }
+    const firstSong = newSongs[0];
+    const queueSize = player.queueSize();
+    const position = addToFrontOfQueue ? 1 : queueSize;
+    const duration = firstSong.isLive ? 'live' : prettyTime(firstSong.length);
 
     if (newSongs.length === 1) {
-      await interaction.editReply(`added to queue: **${firstSong.title}** added to the${addToFrontOfQueue ? ' front of the' : ''} queue${skipCurrentTrack ? 'and current track skipped' : ''}${extraMsg}`);
+      const embed = new EmbedBuilder()
+        .setColor(0x00d4ff)
+        .setTitle('track queued')
+        .setDescription(`**[${firstSong.title}](${firstSong.url})**`)
+        .addFields([
+          {name: 'position', value: `#${position}`, inline: true},
+          {name: 'duration', value: duration, inline: true},
+        ])
+        .setFooter({text: `droidlab · ${firstSong.artist ?? 'unknown'}`});
+
+      if (firstSong.thumbnailUrl) {
+        embed.setThumbnail(firstSong.thumbnailUrl);
+      }
+
+      if (!wasPlayingSong) {
+        await interaction.editReply({embeds: [buildPlayingMessageEmbed(player)]});
+      } else {
+        await interaction.editReply({embeds: [embed]});
+      }
     } else {
-      await interaction.editReply(`added to queue: **${firstSong.title}** and ${newSongs.length - 1} other songs were added to the queue${skipCurrentTrack ? 'and current track skipped' : ''}${extraMsg}`);
+      const totalDuration = newSongs.reduce((acc, s) => acc + s.length, 0);
+      const embed = new EmbedBuilder()
+        .setColor(0x00d4ff)
+        .setTitle('playlist queued')
+        .setDescription(`**${firstSong.title}** and **${newSongs.length - 1}** other tracks`)
+        .addFields([
+          {name: 'tracks', value: `${newSongs.length}`, inline: true},
+          {name: 'total duration', value: prettyTime(totalDuration), inline: true},
+        ])
+        .setFooter({text: 'droidlab'});
+
+      await interaction.editReply({embeds: [embed]});
     }
   }
 
@@ -137,12 +137,11 @@ export default class AddQueryToQueue {
           || !song.url) {
       return song;
     }
-
     try {
       const segments = await this.cache.wrap(
         async () => this.sponsorBlock?.getSegments(song.url, ['music_offtopic']),
         {
-          key: song.url, // Value is too short for hashing
+          key: song.url,
           expiresIn: ONE_HOUR_IN_SECONDS,
         },
       ) ?? [];
@@ -150,44 +149,34 @@ export default class AddQueryToQueue {
         .sort((a, b) => a.startTime - b.startTime)
         .reduce((acc: Array<{startTime: number; endTime: number}>, {startTime, endTime}) => {
           const previousSegment = acc[acc.length - 1];
-          // If segments overlap merge
           if (previousSegment && previousSegment.endTime > startTime) {
             acc[acc.length - 1].endTime = endTime;
           } else {
             acc.push({startTime, endTime});
           }
-
           return acc;
         }, []);
-
       const intro = skipSegments[0];
       const outro = skipSegments.at(-1);
       if (outro && outro?.endTime >= song.length - 2) {
         song.length -= outro.endTime - outro.startTime;
       }
-
       if (intro?.startTime <= 2) {
         song.offset = Math.floor(intro.endTime);
         song.length -= song.offset;
       }
-
       return song;
     } catch (e) {
       if (!(e instanceof Error)) {
         console.error('Unexpected event occurred while fetching skip segments : ', e);
         return song;
       }
-
       if (!e.message.includes('404')) {
-        // Don't log 404 response, it just means that there are no segments for given video
         console.warn(`Could not fetch skip segments for "${song.url}" :`, e);
       }
-
       if (e.message.includes('504')) {
-        // Stop fetching SponsorBlock data when servers are down
         this.sponsorBlockDisabledUntil = new Date(new Date().getTime() + (this.sponsorBlockTimeoutDelay * 60_000));
       }
-
       return song;
     }
   }
