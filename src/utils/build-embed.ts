@@ -51,7 +51,6 @@ const getPlayerUI = (player: Player) => {
   return `${button} ${progressBar} \`[${elapsedTime}]\` 🔉 ${vol} ${loop}`;
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const buildPlayerButtons = (player: Player): ActionRowBuilder<any> => {
   const isPlaying = player.status === STATUS.PLAYING;
 
