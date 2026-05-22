@@ -119,7 +119,7 @@ export default class implements Command {
 
       await i.deferUpdate();
 
-      let tracks: Array<{title: string; url: string; source: string}> = [];
+      let tracks: Array<{title: string; artist: string; url: string; source: string; duration: number; thumbnail: string}> = [];
 
       try {
         const res = await fetch(`${PLAYLIST_API}/api/bot/playlist/${encodeURIComponent(playlistName)}?user=${ownerId}`);
@@ -152,40 +152,37 @@ export default class implements Command {
       for (const track of tracks) {
         player.add({
           title: track.title,
-          artist: '',
+          artist: track.artist ?? '',
           url: track.url,
           playlist: {title: playlistName, source: 'playlist-app'},
           isLive: false,
-          length: 0,
+          length: track.duration ?? 0,
           offset: 0,
           source: track.source === 'youtube' ? 0 : 1,
-          thumbnailUrl: '',
+          thumbnailUrl: track.thumbnail ?? '',
           addedInChannelId: interaction.channel!.id,
           requestedBy: interaction.user.id,
         }, {immediate: false});
       }
 
       if (wasPlaying) {
-        const doneEmbed = new EmbedBuilder()
-          .setColor(0x00d4ff)
-          .setTitle('playlist queued')
-          .setDescription(`**${playlistName}** — ${tracks.length} track${tracks.length === 1 ? '' : 's'} added to the queue`)
-          .setFooter({text: 'droidlab'});
-
-        await interaction.editReply({embeds: [doneEmbed], components: []});
+        void player.play();
       } else {
         await player.connect(targetVoiceChannel);
         void player.play();
-
-        const doneEmbed = new EmbedBuilder()
-          .setColor(0x00d4ff)
-          .setTitle('now playing playlist')
-          .setDescription(`**${playlistName}** — ${tracks.length} track${tracks.length === 1 ? '' : 's'}`)
-          .setFooter({text: 'droidlab'});
-
-        await interaction.editReply({embeds: [doneEmbed], components: []});
       }
 
+      // Build track preview — show first 10 tracks
+      const preview = tracks.slice(0, 10).map((t, idx) => `\`${idx + 1}.\` ${t.title}${t.artist ? ` — ${t.artist}` : ''}`).join('\n');
+      const extra = tracks.length > 10 ? `\nand ${tracks.length - 10} more...` : '';
+
+      const doneEmbed = new EmbedBuilder()
+        .setColor(0x00d4ff)
+        .setTitle(`Playlist "${playlistName}" — ${tracks.length} song${tracks.length === 1 ? '' : 's'}`)
+        .setDescription(`${preview}${extra}`)
+        .setFooter({text: `droidlab · page 1 of ${Math.ceil(tracks.length / 10)}`});
+
+      await interaction.editReply({embeds: [doneEmbed], components: []});
       collector.stop();
     });
 
