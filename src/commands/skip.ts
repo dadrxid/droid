@@ -5,6 +5,7 @@ import PlayerManager from '../managers/player.js';
 import Command from './index.js';
 import {SlashCommandBuilder} from '@discordjs/builders';
 import {buildPlayingMessageEmbed, buildPlayerButtons} from '../utils/build-embed.js';
+import {STATUS} from '../services/player.js';
 
 @injectable()
 export default class implements Command {
@@ -35,33 +36,43 @@ export default class implements Command {
 
     try {
       await player.forward(numToSkip);
-      if (player.getCurrent()) {
-        const msg = await interaction.reply({
-          embeds: [buildPlayingMessageEmbed(player)],
-          components: [buildPlayerButtons(player)],
-          fetchReply: true,
-        });
-        const collector = msg.createMessageComponentCollector({time: 5 * 60 * 1000});
-        collector.on('collect', async i => {
-          if (!i.guild) return;
-          const p = this.playerManager.get(i.guild.id);
-          if (i.customId === 'player_pause') {
-            if (p.status === 'playing') { p.pause(); } else { p.resume(); }
-          } else if (i.customId === 'player_skip') {
-            await p.forward(1);
-          } else if (i.customId === 'player_stop') {
-            p.stop();
-          } else if (i.customId === 'player_loop') {
-            p.loopCurrentSong = !p.loopCurrentSong;
-          }
-          await i.update({
-            embeds: p.getCurrent() ? [buildPlayingMessageEmbed(p)] : [],
-            components: p.getCurrent() ? [buildPlayerButtons(p)] : [],
-          });
-        });
-      } else {
-        await interaction.reply('track skipped');
+
+      if (!player.getCurrent()) {
+        await interaction.reply({content: 'track skipped'});
+        return;
       }
+
+      const msg = await interaction.reply({
+        embeds: [buildPlayingMessageEmbed(player)],
+        components: [buildPlayerButtons(player)],
+        fetchReply: true,
+      });
+
+      const collector = msg.createMessageComponentCollector({time: 5 * 60 * 1000});
+
+      collector.on('collect', async i => {
+        if (!i.guild) {
+          return;
+        }
+        const p = this.playerManager.get(i.guild.id);
+        if (i.customId === 'player_pause') {
+          if (p.status === STATUS.PLAYING) {
+            p.pause();
+          } else {
+            p.resume();
+          }
+        } else if (i.customId === 'player_skip') {
+          await p.forward(1);
+        } else if (i.customId === 'player_stop') {
+          p.stop();
+        } else if (i.customId === 'player_loop') {
+          p.loopCurrentSong = !p.loopCurrentSong;
+        }
+        await i.update({
+          embeds: p.getCurrent() ? [buildPlayingMessageEmbed(p)] : [],
+          components: p.getCurrent() ? [buildPlayerButtons(p)] : [],
+        });
+      });
     } catch (_: unknown) {
       throw new Error('no song to skip to');
     }

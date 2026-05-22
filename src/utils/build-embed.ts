@@ -1,6 +1,7 @@
 import getYouTubeID from 'get-youtube-id';
-import {EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType} from 'discord.js';
+import {EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle} from 'discord.js';
 import Player, {MediaSource, QueuedSong, STATUS} from '../services/player.js';
+import getProgressBar from './get-progress-bar.js';
 import {prettyTime} from './time.js';
 import {truncate} from './string.js';
 
@@ -27,9 +28,23 @@ const getQueueInfo = (player: Player) => {
   return queueSize === 1 ? '1 song' : `${queueSize} songs`;
 };
 
-export const buildPlayerButtons = (player: Player) => {
+const getPlayerUI = (player: Player) => {
+  const song = player.getCurrent();
+  if (!song) {
+    return '';
+  }
+  const position = player.getPosition();
+  const button = player.status === STATUS.PLAYING ? '⏸️' : '▶️';
+  const progressBar = getProgressBar(10, position / song.length);
+  const elapsedTime = song.isLive ? 'live' : `${prettyTime(position)}/${prettyTime(song.length)}`;
+  const loop = player.loopCurrentSong ? '🔂' : player.loopCurrentQueue ? '🔁' : '';
+  const vol: string = typeof player.getVolume() === 'number' ? `${player.getVolume()!}%` : '';
+  return `${button} ${progressBar} \`[${elapsedTime}]\` 🔉 ${vol} ${loop}`;
+};
+
+export const buildPlayerButtons = (player: Player): ActionRowBuilder<ButtonBuilder> => {
   const isPlaying = player.status === STATUS.PLAYING;
-  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId('player_pause')
       .setLabel(isPlaying ? 'Pause' : 'Resume')
@@ -51,7 +66,6 @@ export const buildPlayerButtons = (player: Player) => {
       .setEmoji('🔁')
       .setStyle(player.loopCurrentSong ? ButtonStyle.Primary : ButtonStyle.Secondary),
   );
-  return row;
 };
 
 export const buildPlayingMessageEmbed = (player: Player): EmbedBuilder => {
@@ -60,16 +74,11 @@ export const buildPlayingMessageEmbed = (player: Player): EmbedBuilder => {
     throw new Error('No playing song found');
   }
   const {artist, thumbnailUrl, requestedBy} = currentlyPlaying;
-  const duration = currentlyPlaying.isLive ? 'live' : prettyTime(currentlyPlaying.length);
   const message = new EmbedBuilder();
   message
     .setColor(player.status === STATUS.PLAYING ? 0x00d4ff : 0x00b4a0)
-    .setTitle(player.status === STATUS.PLAYING ? 'Now Playing' : 'Paused')
-    .setDescription(`**${getSongTitle(currentlyPlaying)}**`)
-    .addFields([
-      {name: 'Duration', value: duration, inline: true},
-      {name: 'Requested by', value: `<@${requestedBy}>`, inline: true},
-    ])
+    .setTitle(player.status === STATUS.PLAYING ? '▶  now playing' : '⏸  paused')
+    .setDescription(`**${getSongTitle(currentlyPlaying)}**\nRequested by: <@${requestedBy}>\n\n${getPlayerUI(player)}`)
     .setFooter({text: `droidlab · ${artist}`});
   if (thumbnailUrl) {
     message.setThumbnail(thumbnailUrl);
@@ -85,7 +94,7 @@ export const buildQueueEmbed = (player: Player, page: number, pageSize: number):
   const queueSize = player.queueSize();
   const maxQueuePage = Math.ceil((queueSize + 1) / pageSize);
   if (page > maxQueuePage) {
-    throw new Error('the queue isn\'t that big');
+    throw new Error("the queue isn't that big");
   }
   const queuePageBegin = (page - 1) * pageSize;
   const queuePageEnd = queuePageBegin + pageSize;
@@ -104,12 +113,13 @@ export const buildQueueEmbed = (player: Player, page: number, pageSize: number):
   const message = new EmbedBuilder();
   let description = `**${getSongTitle(currentlyPlaying)}**\n`;
   description += `Requested by: <@${requestedBy}>\n\n`;
+  description += `${getPlayerUI(player)}\n\n`;
   if (player.getQueue().length > 0) {
     description += '**up next:**\n';
     description += queuedSongs;
   }
   message
-    .setTitle(player.status === STATUS.PLAYING ? `Now Playing ${player.loopCurrentSong ? '· 🔂' : ''}` : '📋  queue')
+    .setTitle(player.status === STATUS.PLAYING ? `▶  now playing ${player.loopCurrentSong ? '· 🔂' : ''}` : '📋  queue')
     .setColor(player.status === STATUS.PLAYING ? 0x00d4ff : 0x0a1520)
     .setDescription(description)
     .addFields([

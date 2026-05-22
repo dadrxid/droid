@@ -94,38 +94,39 @@ export default class AddQueryToQueue {
     const position = addToFrontOfQueue ? 1 : queueSize;
     const duration = firstSong.isLive ? 'live' : prettyTime(firstSong.length);
 
+    if (!wasPlayingSong) {
+      await interaction.editReply({
+        embeds: [buildPlayingMessageEmbed(player)],
+        components: [buildPlayerButtons(player)],
+      });
+      return;
+    }
+
     if (newSongs.length === 1) {
       const embed = new EmbedBuilder()
         .setColor(0x00d4ff)
-        .setTitle('track queued')
-        .setDescription(`**[${firstSong.title}](${firstSong.url})**`)
+        .setTitle('📋  track queued')
+        .setDescription(`**${firstSong.title}**`)
         .addFields([
           {name: 'position', value: `#${position}`, inline: true},
           {name: 'duration', value: duration, inline: true},
         ])
         .setFooter({text: `droidlab · ${firstSong.artist ?? 'unknown'}`});
-
       if (firstSong.thumbnailUrl) {
         embed.setThumbnail(firstSong.thumbnailUrl);
       }
-
-      if (!wasPlayingSong) {
-        await interaction.editReply({embeds: [buildPlayingMessageEmbed(player)], components: [buildPlayerButtons(player)]});
-      } else {
-        await interaction.editReply({embeds: [embed]});
-      }
+      await interaction.editReply({embeds: [embed]});
     } else {
       const totalDuration = newSongs.reduce((acc, s) => acc + s.length, 0);
       const embed = new EmbedBuilder()
         .setColor(0x00d4ff)
-        .setTitle('playlist queued')
+        .setTitle('📋  playlist queued')
         .setDescription(`**${firstSong.title}** and **${newSongs.length - 1}** other tracks`)
         .addFields([
           {name: 'tracks', value: `${newSongs.length}`, inline: true},
           {name: 'total duration', value: prettyTime(totalDuration), inline: true},
         ])
         .setFooter({text: 'droidlab'});
-
       await interaction.editReply({embeds: [embed]});
     }
   }
