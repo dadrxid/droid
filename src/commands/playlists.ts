@@ -9,6 +9,7 @@ import {buildPlayingMessageEmbed, buildPlayerButtons} from '../utils/build-embed
 import {prettyTime} from '../utils/time.js';
 
 const PLAYLIST_API = process.env.PLAYLIST_API_URL ?? 'https://playlist.droidlab.org';
+const HOMELAB_API = 'https://api.droidlab.org';
 
 @injectable()
 export default class implements Command {
@@ -193,7 +194,31 @@ export default class implements Command {
       // Send now playing embed to the text channel
       const nowPlayingChannel = interaction.channel;
       if (nowPlayingChannel?.isTextBased()) {
-undefined
+        player.nowPlayingMessage = await nowPlayingChannel.send({
+          embeds: [buildPlayingMessageEmbed(player)],
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          components: [buildPlayerButtons(player)] as any,
+        });
+      }
+
+      // Post status to homelab API
+      const currentSong = player.getCurrent();
+      if (currentSong && interaction.guild) {
+        try {
+          await fetch(`${HOMELAB_API}/status/bot`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+              playing: true,
+              guildId: interaction.guild.id,
+              guild: interaction.guild.name,
+              song: currentSong.title,
+              artist: currentSong.artist,
+              thumbnail: currentSong.thumbnailUrl ?? '',
+            }),
+          });
+        } catch {}
+      }
 
       const pageSize = 10;
       const maxPage = Math.ceil(tracks.length / pageSize);
@@ -289,6 +314,7 @@ undefined
       const num = start + idx + 1;
       const artist = t.artist ? ` — **${t.artist}**` : '';
       const link = t.url?.startsWith('http') ? `[${t.title}](${t.url})` : t.title;
+
       return `${num}. ${link}${artist}`;
     }).join('\n');
 
