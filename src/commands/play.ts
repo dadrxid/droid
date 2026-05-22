@@ -26,16 +26,12 @@ export default class implements Command {
     this.cache = cache;
     this.addQueryToQueue = addQueryToQueue;
 
-    const queryDescription = thirdParty === undefined
-      ? 'YouTube URL or search query'
-      : 'YouTube URL, Spotify URL, or search query';
-
     this.slashCommand = new SlashCommandBuilder()
       .setName('play')
       .setDescription('play a song')
       .addStringOption(option => option
         .setName('query')
-        .setDescription(queryDescription)
+        .setDescription('YouTube URL or search query')
         .setAutocomplete(true)
         .setRequired(true))
       .addBooleanOption(option => option
@@ -55,6 +51,15 @@ export default class implements Command {
   public async execute(interaction: ChatInputCommandInteraction): Promise<void> {
     const query = interaction.options.getString('query')!;
 
+    if (query.includes('spotify.com') || query.startsWith('spotify:')) {
+      await interaction.reply({
+        content: '🚫 Spotify links are no longer supported due to Spotify API changes.\nUse a YouTube URL or search query instead.\nTo play your Spotify playlists, convert them at **tunemymusic.com** then paste the YouTube URL.',
+        ephemeral: true,
+      });
+
+      return;
+    }
+
     await this.addQueryToQueue.addToQueue({
       interaction,
       query: query.trim(),
@@ -70,14 +75,14 @@ export default class implements Command {
 
     if (!query || query.length === 0) {
       await interaction.respond([]);
+
       return;
     }
 
     try {
-      // Don't return suggestions for URLs
-      // eslint-disable-next-line no-new
       new URL(query);
       await interaction.respond([]);
+
       return;
     } catch {}
 
