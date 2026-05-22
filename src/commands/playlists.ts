@@ -27,6 +27,59 @@ export default class implements Command {
     this.playerManager = playerManager;
   }
 
+  private buildPageButtons(page: number, maxPage: number): ActionRowBuilder<ButtonBuilder> {
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId('pl_first')
+        .setEmoji('⏮')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(page <= 1),
+      new ButtonBuilder()
+        .setCustomId('pl_prev')
+        .setEmoji('⬅️')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(page <= 1),
+      new ButtonBuilder()
+        .setCustomId('pl_next')
+        .setEmoji('➡️')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(page >= maxPage),
+      new ButtonBuilder()
+        .setCustomId('pl_last')
+        .setEmoji('⏭')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(page >= maxPage),
+    );
+  }
+
+  private buildTrackEmbed(
+    tracks: Array<{title: string; artist: string; url: string; duration: number}>,
+    playlistName: string,
+    page: number,
+    pageSize: number,
+  ): EmbedBuilder {
+    const maxPage = Math.ceil(tracks.length / pageSize);
+    const start = (page - 1) * pageSize;
+    const slice = tracks.slice(start, start + pageSize);
+    const totalDuration = tracks.reduce((acc, t) => acc + (t.duration ?? 0), 0);
+
+    const preview = slice.map((t, idx) => {
+      const num = start + idx + 1;
+      const artist = t.artist ? ` — **${t.artist}**` : '';
+      const link = t.url && t.url.startsWith('http') ? `[${t.title}](${t.url})` : t.title;
+      return `${num}. ${link}${artist}`;
+    }).join('\n');
+
+    const extra = tracks.length > start + pageSize ? `\nAnd ${tracks.length - (start + pageSize)} more...` : '';
+    const durationStr = totalDuration > 0 ? prettyTime(totalDuration) : 'unknown duration';
+
+    return new EmbedBuilder()
+      .setColor(0x00d4ff)
+      .setTitle(`Playlist "${playlistName}" — ${tracks.length} song${tracks.length === 1 ? '' : 's'} — ${durationStr}`)
+      .setDescription(`${preview}${extra}`)
+      .setFooter({text: `droidlab · page ${page} of ${maxPage}`});
+  }
+
   public async execute(interaction: ChatInputCommandInteraction): Promise<void> {
     const targetUser = interaction.options.getUser('user') ?? interaction.user;
     const discordId = targetUser.id;
@@ -98,7 +151,7 @@ export default class implements Command {
 
     const unique = Array.from(new Map(playlists.map(p => [p.id, p])).values()).slice(0, 25);
 
-    const embed = new EmbedBuilder()
+    const listEmbed = new EmbedBuilder()
       .setColor(0x00d4ff)
       .setAuthor({name: isSelf ? 'your playlists' : `${targetUser.username}'s playlists`})
       .setDescription(
@@ -118,9 +171,9 @@ export default class implements Command {
       })));
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select) as any;
+    const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select) as any;
 
-    const msg = await interaction.editReply({embeds: [embed], components: [row]});
+    const msg = await interaction.editReply({embeds: [listEmbed], components: [selectRow]});
 
     const collector = msg.createMessageComponentCollector({
       componentType: ComponentType.StringSelect,
@@ -187,28 +240,58 @@ export default class implements Command {
 
       void player.play();
 
-      // Build preview styled like the reference — numbered with artist tags
-      const totalDuration = tracks.reduce((acc, t) => acc + (t.duration ?? 0), 0);
-      const pages = Math.ceil(tracks.length / 10);
-      const preview = tracks.slice(0, 10).map((t, idx) => {
-        const artist = t.artist ? ` — **${t.artist}**` : '';
-        return `${idx + 1}. ${t.title}${artist}`;
-      }).join('\n');
-      const extra = tracks.length > 10 ? `\nAnd ${tracks.length - 10} more...` : '';
+      const pageSize = 10;
+      const maxPage = Math.ceil(tracks.length / pageSize);
+      let currentPage = 1;
 
-      const doneEmbed = new EmbedBuilder()
-        .setColor(0x00d4ff)
-        .setTitle(`Playlist "${playlistName}" — ${tracks.length} song${tracks.length === 1 ? '' : 's'} — ${prettyTime(totalDuration)}`)
-        .setDescription(`${preview}${extra}`)
-        .setFooter({text: `droidlab · page 1 of ${pages}`});
+      const doneEmbed = this.buildTrackEmbed(tracks, playlistName, currentPage, pageSize);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const pageButtons = maxPage > 1 ? [this.buildPageButtons(currentPage, maxPage)] as any : [];
 
-      await interaction.editReply({embeds: [doneEmbed], components: []});
+      await interaction.editReply({embeds: [doneEmbed], components: pageButtons});
       collector.stop();
+
+      if (maxPage <= 1) {
+        return;
+      }
+
+      const pageCollector = msg.createMessageComponentCollector({
+        componentType: ComponentType.Button,
+        time: 5 * 60 * 1000,
+      });
+
+      pageCollector.on('collect', async btn => {
+        if (btn.user.id !== interaction.user.id) {
+          await btn.reply({content: 'only the person who ran this command can navigate pages', ephemeral: true});
+          return;
+        }
+
+        if (btn.customId === 'pl_first') {
+          currentPage = 1;
+        } else if (btn.customId === 'pl_prev' && currentPage > 1) {
+          currentPage--;
+        } else if (btn.customId === 'pl_next' && currentPage < maxPage) {
+          currentPage++;
+        } else if (btn.customId === 'pl_last') {
+          currentPage = maxPage;
+        }
+
+        const newEmbed = this.buildTrackEmbed(tracks, playlistName, currentPage, pageSize);
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        const newButtons = [this.buildPageButtons(currentPage, maxPage)] as any;
+        await btn.update({embeds: [newEmbed], components: newButtons});
+      });
+
+      pageCollector.on('end', async () => {
+        try {
+          await interaction.editReply({components: []});
+        } catch {}
+      });
     });
 
     collector.on('end', async (_, reason) => {
       if (reason === 'time') {
-        await interaction.editReply({embeds: [embed], components: []}).catch(() => null);
+        await interaction.editReply({embeds: [listEmbed], components: []}).catch(() => null);
       }
     });
   }

@@ -29,6 +29,7 @@ import NowPlaying from './commands/now-playing.js';
 import Pause from './commands/pause.js';
 import Play from './commands/play.js';
 import Playlists from './commands/playlists.js';
+import Import from './commands/import.js';
 import QueueCommand from './commands/queue.js';
 import Remove from './commands/remove.js';
 import Replay from './commands/replay.js';
@@ -90,6 +91,7 @@ if (config.SPOTIFY_CLIENT_ID !== '' && config.SPOTIFY_CLIENT_SECRET !== '') {
   QueueCommand,
   Remove,
   Playlists,
+  Import,
   Replay,
   Resume,
   Seek,
