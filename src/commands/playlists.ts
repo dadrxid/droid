@@ -1,12 +1,10 @@
-import {ChatInputCommandInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuInteraction, ComponentType} from 'discord.js';
+import {ChatInputCommandInteraction, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuInteraction, ComponentType, GuildMember} from 'discord.js';
 import {SlashCommandBuilder} from '@discordjs/builders';
 import {inject, injectable} from 'inversify';
 import {TYPES} from '../types.js';
 import Command from './index.js';
 import PlayerManager from '../managers/player.js';
-import AddQueryToQueue from '../services/add-query-to-queue.js';
 import {getMemberVoiceChannel, getMostPopularVoiceChannel} from '../utils/channels.js';
-import {GuildMember} from 'discord.js';
 
 const PLAYLIST_API = process.env.PLAYLIST_API_URL ?? 'https://playlist.droidlab.org';
 
@@ -23,14 +21,11 @@ export default class implements Command {
   public requiresVC = true;
 
   private readonly playerManager: PlayerManager;
-  private readonly addQueryToQueue: AddQueryToQueue;
 
   constructor(
     @inject(TYPES.Managers.Player) playerManager: PlayerManager,
-    @inject(TYPES.Services.AddQueryToQueue) addQueryToQueue: AddQueryToQueue,
   ) {
     this.playerManager = playerManager;
-    this.addQueryToQueue = addQueryToQueue;
   }
 
   public async execute(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -40,20 +35,21 @@ export default class implements Command {
 
     await interaction.deferReply();
 
-    // Fetch playlists from playlist app API
     let playlists: Array<{id: number; name: string; track_count: number; private: number}> = [];
 
     try {
       const res = await fetch(`${PLAYLIST_API}/api/bot/user/${discordId}/playlists`);
 
-      if (!res.ok) {
+      if (res.ok) {
+        playlists = await res.json() as typeof playlists;
+      } else {
         await interaction.editReply({
           embeds: [
             new EmbedBuilder()
               .setColor(0x0a1520)
               .setTitle('no playlists found')
               .setDescription(isSelf
-                ? `you don't have any public playlists yet.\ncreate one at [playlist.droidlab.org](https://playlist.droidlab.org)`
+                ? 'you don\'t have any public playlists yet.\ncreate one at [playlist.droidlab.org](https://playlist.droidlab.org)'
                 : `<@${discordId}> has no public playlists.`)
               .setFooter({text: 'droidlab'}),
           ],
@@ -61,8 +57,6 @@ export default class implements Command {
 
         return;
       }
-
-      playlists = await res.json() as typeof playlists;
     } catch {
       await interaction.editReply('could not reach the playlist service — is it running?');
 
@@ -76,7 +70,7 @@ export default class implements Command {
             .setColor(0x0a1520)
             .setTitle('no playlists found')
             .setDescription(isSelf
-              ? `you don't have any public playlists yet.\ncreate one at [playlist.droidlab.org](https://playlist.droidlab.org)`
+              ? 'you don\'t have any public playlists yet.\ncreate one at [playlist.droidlab.org](https://playlist.droidlab.org)'
               : `<@${discordId}> has no public playlists.`)
             .setFooter({text: 'droidlab'}),
         ],
@@ -85,14 +79,12 @@ export default class implements Command {
       return;
     }
 
-    // Build embed listing playlists
     const embed = new EmbedBuilder()
       .setColor(0x00d4ff)
       .setTitle(isSelf ? 'your playlists' : `${targetUser.username}'s playlists`)
       .setDescription(playlists.map((p, i) => `\`${i + 1}.\` **${p.name}** · ${p.track_count} track${p.track_count !== 1 ? 's' : ''}`).join('\n'))
       .setFooter({text: 'droidlab · select a playlist to queue it'});
 
-    // Build select menu
     const select = new StringSelectMenuBuilder()
       .setCustomId('playlist_select')
       .setPlaceholder('choose a playlist to queue...')
@@ -127,21 +119,20 @@ export default class implements Command {
 
       await i.deferUpdate();
 
-      // Fetch tracks
       let tracks: Array<{title: string; url: string; source: string}> = [];
 
       try {
         const res = await fetch(`${PLAYLIST_API}/api/bot/playlist/${encodeURIComponent(playlistName)}?user=${ownerId}`);
 
-        if (!res.ok) {
+        if (res.ok) {
+          const data = await res.json() as {name: string; tracks: typeof tracks};
+          tracks = data.tracks;
+        } else {
           await interaction.editReply({embeds: [embed], components: []});
           await i.followUp({content: 'could not load that playlist', ephemeral: true});
 
           return;
         }
-
-        const data = await res.json() as {name: string; tracks: typeof tracks};
-        tracks = data.tracks;
       } catch {
         await i.followUp({content: 'could not reach the playlist service', ephemeral: true});
 
@@ -154,7 +145,6 @@ export default class implements Command {
         return;
       }
 
-      // Queue all tracks
       const player = this.playerManager.get(interaction.guild!.id);
       const [targetVoiceChannel] = getMemberVoiceChannel(interaction.member as GuildMember) ?? getMostPopularVoiceChannel(interaction.guild!);
       const wasPlaying = player.getCurrent() !== null;
@@ -175,18 +165,27 @@ export default class implements Command {
         }, {immediate: false});
       }
 
-      if (!wasPlaying) {
+      if (wasPlaying) {
+        const doneEmbed = new EmbedBuilder()
+          .setColor(0x00d4ff)
+          .setTitle('playlist queued')
+          .setDescription(`**${playlistName}** — ${tracks.length} track${tracks.length !== 1 ? 's' : ''} added to the queue`)
+          .setFooter({text: 'droidlab'});
+
+        await interaction.editReply({embeds: [doneEmbed], components: []});
+      } else {
         await player.connect(targetVoiceChannel);
         void player.play();
+
+        const doneEmbed = new EmbedBuilder()
+          .setColor(0x00d4ff)
+          .setTitle('now playing playlist')
+          .setDescription(`**${playlistName}** — ${tracks.length} track${tracks.length !== 1 ? 's' : ''}`)
+          .setFooter({text: 'droidlab'});
+
+        await interaction.editReply({embeds: [doneEmbed], components: []});
       }
 
-      const doneEmbed = new EmbedBuilder()
-        .setColor(0x00d4ff)
-        .setTitle('playlist queued')
-        .setDescription(`**${playlistName}** — ${tracks.length} track${tracks.length !== 1 ? 's' : ''} added to the queue`)
-        .setFooter({text: 'droidlab'});
-
-      await interaction.editReply({embeds: [doneEmbed], components: []});
       collector.stop();
     });
 
