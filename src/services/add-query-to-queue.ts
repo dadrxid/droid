@@ -82,7 +82,7 @@ export default class AddQueryToQueue {
 
     if (!wasPlayingSong) {
       await player.connect(targetVoiceChannel);
-      void player.play();
+      await player.play();
     }
 
     if (skipCurrentTrack) {
