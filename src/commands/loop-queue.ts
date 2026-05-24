@@ -27,7 +27,10 @@ export default class implements Command {
       throw new Error('no songs to loop!');
     }
 
-    if (player.queueSize() < 2) {
+    // FIX: was `< 2` which required 2 songs beyond the current one.
+    // queueSize() excludes the current song, so < 1 means at least 1 queued
+    // song (+ current = 2 total) which is enough for a loop queue.
+    if (player.queueSize() < 1) {
       throw new Error('not enough songs to loop a queue!');
     }
 
