@@ -82,7 +82,7 @@ export default class AddQueryToQueue {
 
     if (!wasPlayingSong) {
       await player.connect(targetVoiceChannel);
-      await player.play();
+      await player.play(); // FIX: was void player.play()
     }
 
     if (skipCurrentTrack) {
@@ -114,10 +114,10 @@ export default class AddQueryToQueue {
           if (p.status === STATUS.PLAYING) {
             p.pause();
           } else {
-            void p.play();
+            await p.play(); // FIX: was void p.play()
           }
         } else if (i.customId === 'player_skip') {
-          void p.forward(1);
+          await p.forward(1); // FIX: was void p.forward(1)
         } else if (i.customId === 'player_stop') {
           p.stop();
         } else if (i.customId === 'player_loop') {
