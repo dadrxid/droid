@@ -2,10 +2,25 @@ import {GuildMember, TextChannel, AttachmentBuilder} from 'discord.js';
 import {createCanvas, loadImage} from '@napi-rs/canvas';
 import path from 'path';
 import {fileURLToPath} from 'url';
+import {prisma} from '../utils/db.js';
 
 const _dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default async (member: GuildMember): Promise<void> => {
+  // Auto role
+  try {
+    const setting = await prisma.setting.findUnique({where: {guildId: member.guild.id}});
+    if (setting?.autoRoleId) {
+      const role = member.guild.roles.cache.get(setting.autoRoleId);
+      if (role) {
+        await member.roles.add(role);
+      }
+    }
+  } catch (error) {
+    console.error('Failed to assign auto role:', error);
+  }
+
+  // Welcome image
   const welcomeChannelId = process.env.WELCOME_CHANNEL_ID;
   if (!welcomeChannelId) {
     return;
