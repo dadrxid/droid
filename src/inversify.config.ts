@@ -16,6 +16,7 @@ import SpotifyAPI from './services/spotify-api.js';
 
 // Commands
 import Command from './commands/index.js';
+import AutoRole from './commands/auto-role.js';
 import Clear from './commands/clear.js';
 import Config from './commands/config.js';
 import Disconnect from './commands/disconnect.js';
@@ -77,6 +78,7 @@ if (config.SPOTIFY_CLIENT_ID !== '' && config.SPOTIFY_CLIENT_SECRET !== '') {
 
 // Commands
 [
+  AutoRole,
   Clear,
   Config,
   Disconnect,
