@@ -14,6 +14,9 @@ RUN apt-get update \
     ca-certificates \
     python3 \
     python3-venv \
+    libcairo2 \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
     && python3 -m venv /opt/yt-dlp \
     && if [ -n "${YT_DLP_VERSION}" ]; then \
         /opt/yt-dlp/bin/pip install --no-cache-dir "yt-dlp==${YT_DLP_VERSION}"; \
@@ -35,6 +38,8 @@ RUN apt-get update \
     && apt-get install --no-install-recommends -y \
     python-is-python3 \
     build-essential \
+    libcairo2-dev \
+    libpango1.0-dev \
     && apt-get autoclean \
     && apt-get autoremove \
     && rm -rf /var/lib/apt/lists/*
