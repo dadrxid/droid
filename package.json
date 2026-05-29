@@ -91,6 +91,7 @@
     "@discordjs/voice": "0.19.2",
     "@distube/ytdl-core": "^4.16.12",
     "@distube/ytsr": "^2.0.4",
+    "@napi-rs/canvas": "^0.1.53",
     "@prisma/client": "4.16.0",
     "@types/libsodium-wrappers": "^0.7.9",
     "array-shuffle": "^3.0.0",
@@ -127,7 +128,6 @@
     "spotify-web-api-node": "^5.0.2",
     "sync-fetch": "^0.3.1",
     "tsx": "3.8.2",
-    "@napi-rs/canvas": "^0.1.53",
     "xbytes": "^1.7.0",
     "ytsr": "^3.8.4"
   },
