@@ -41,6 +41,7 @@ import Skip from './commands/skip.js';
 import Stop from './commands/stop.js';
 import Unskip from './commands/unskip.js';
 import Volume from './commands/volume.js';
+import Welcome from './commands/welcome.js';
 import WelcomeTest from './commands/welcome-test.js';
 import ThirdParty from './services/third-party.js';
 import FileCacheProvider from './services/file-cache.js';
@@ -103,6 +104,7 @@ if (config.SPOTIFY_CLIENT_ID !== '' && config.SPOTIFY_CLIENT_SECRET !== '') {
   Stop,
   Unskip,
   Volume,
+  Welcome,
   WelcomeTest,
 ].forEach(command => {
   container.bind<Command>(TYPES.Command).to(command).inSingletonScope();
