@@ -7,9 +7,10 @@ import {prisma} from '../utils/db.js';
 const _dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default async (member: GuildMember): Promise<void> => {
+  const setting = await prisma.setting.findUnique({where: {guildId: member.guild.id}});
+
   // Auto role
   try {
-    const setting = await prisma.setting.findUnique({where: {guildId: member.guild.id}});
     if (setting?.autoRoleId) {
       const role = member.guild.roles.cache.get(setting.autoRoleId);
       if (role) {
@@ -20,8 +21,8 @@ export default async (member: GuildMember): Promise<void> => {
     console.error('Failed to assign auto role:', error);
   }
 
-  // Welcome image
-  const welcomeChannelId = process.env.WELCOME_CHANNEL_ID;
+  // Welcome image — only fires if this guild has a welcome channel configured
+  const welcomeChannelId = setting?.welcomeChannelId;
   if (!welcomeChannelId) {
     return;
   }
