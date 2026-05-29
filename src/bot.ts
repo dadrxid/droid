@@ -7,6 +7,7 @@ import Command from './commands/index.js';
 import debug from './utils/debug.js';
 import handleGuildCreate from './events/guild-create.js';
 import handleVoiceStateUpdate from './events/voice-state-update.js';
+import handleGuildMemberAdd from './events/guild-member-add.js';
 import errorMsg from './utils/error-msg.js';
 import {isUserInVoice} from './utils/channels.js';
 import Config from './services/config.js';
@@ -34,7 +35,6 @@ export default class {
   public async register(): Promise<void> {
     // Load in commands
     for (const command of container.getAll<Command>(TYPES.Command)) {
-      // Make sure we can serialize to JSON without errors
       try {
         command.slashCommand.toJSON();
       } catch (error) {
@@ -53,7 +53,6 @@ export default class {
       }
     }
 
-    // Register event handlers
     // eslint-disable-next-line complexity
     this.client.on('interactionCreate', async interaction => {
       try {
@@ -102,7 +101,6 @@ export default class {
       } catch (error: unknown) {
         debug(error);
 
-        // This can fail if the message was deleted, and we don't want to crash the whole bot
         try {
           if ((interaction.isCommand() || interaction.isButton()) && (interaction.replied || interaction.deferred)) {
             await interaction.editReply(errorMsg(error as Error));
@@ -118,7 +116,6 @@ export default class {
     this.client.once('ready', async () => {
       debug(generateDependencyReport());
 
-      // Update commands
       const rest = new REST({version: '10'}).setToken(this.config.DISCORD_TOKEN);
       if (this.shouldRegisterCommandsOnBot) {
         spinner.text = '📡 updating commands on bot...';
@@ -138,7 +135,6 @@ export default class {
               commands: this.commandsByName.map(c => c.slashCommand),
             });
           }),
-          // Remove commands registered on bot (if they exist)
           rest.put(Routes.applicationCommands(this.client.user!.id), {body: []}),
         ],
         );
@@ -163,6 +159,7 @@ export default class {
 
     this.client.on('guildCreate', handleGuildCreate);
     this.client.on('voiceStateUpdate', handleVoiceStateUpdate);
+    this.client.on('guildMemberAdd', handleGuildMemberAdd);
     await this.client.login();
   }
 }
