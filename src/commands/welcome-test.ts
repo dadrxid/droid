@@ -1,6 +1,7 @@
 import {SlashCommandBuilder} from '@discordjs/builders';
-import {CommandInteraction, GuildMember} from 'discord.js';
+import {ChatInputCommandInteraction, GuildMember} from 'discord.js';
 import {injectable} from 'inversify';
+import Command from './index.js';
 import handleGuildMemberAdd from '../events/guild-member-add.js';
 
 const OWNER_ID = '397068987000815616';
@@ -13,7 +14,7 @@ export default class implements Command {
 
   public readonly handledButtonIds = [];
 
-  async execute(interaction: CommandInteraction) {
+  async execute(interaction: ChatInputCommandInteraction) {
     if (interaction.user.id !== OWNER_ID) {
       await interaction.reply({content: 'You don\'t have permission to use this command.', ephemeral: true});
       return;
