@@ -156,6 +156,12 @@ export default class {
 
     this.client.on('error', console.error);
     this.client.on('debug', debug);
+    this.client.on('shardDisconnect', (event, shardId) => {
+      console.warn(`Discord shard ${shardId} disconnected (${event.code}): ${event.reason || 'no reason'}`);
+    });
+    this.client.on('shardError', (error, shardId) => {
+      console.error(`Discord shard ${shardId} error:`, error);
+    });
 
     this.client.on('guildCreate', handleGuildCreate);
     this.client.on('voiceStateUpdate', handleVoiceStateUpdate);

@@ -667,6 +667,14 @@ export default class {
   }
 
   private async onAudioPlayerIdle(_oldState: AudioPlayerState, newState: AudioPlayerState): Promise<void> {
+    try {
+      await this.handleAudioPlayerIdle(newState);
+    } catch (error: unknown) {
+      console.error('Error while advancing playback after track ended:', error);
+    }
+  }
+
+  private async handleAudioPlayerIdle(newState: AudioPlayerState): Promise<void> {
     // Automatically advance queued song at end
     if (this.loopCurrentSong && newState.status === AudioPlayerStatus.Idle && this.status === STATUS.PLAYING) {
       await this.seek(0);
