@@ -160,6 +160,14 @@ export default class {
     this.client.on('guildCreate', handleGuildCreate);
     this.client.on('voiceStateUpdate', handleVoiceStateUpdate);
     this.client.on('guildMemberAdd', handleGuildMemberAdd);
-    await this.client.login();
+
+    try {
+      await this.client.login(this.config.DISCORD_TOKEN);
+    } catch (error: unknown) {
+      spinner.fail('Failed to log in to Discord');
+      console.error(error);
+      console.error('Check DISCORD_TOKEN is valid and was not reset in the Discord Developer Portal.');
+      process.exit(1);
+    }
   }
 }

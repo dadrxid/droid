@@ -81,5 +81,11 @@ const hasDatabaseBeenMigratedToPrisma = async () => {
 
   spinner.succeed('Database migrations applied.');
 
-  await startBot();
+  try {
+    await startBot();
+  } catch (error: unknown) {
+    console.error('Bot failed to start:');
+    console.error(error);
+    process.exit(1);
+  }
 })();

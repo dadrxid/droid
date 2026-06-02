@@ -13,6 +13,8 @@ const firstNonEmpty = (...values: Array<string | undefined>) => values
   .map(value => value?.trim())
   .find((value): value is string => Boolean(value));
 
+const REQUIRED_NON_EMPTY = new Set(['DISCORD_TOKEN', 'YOUTUBE_API_KEY']);
+
 const CONFIG_MAP = {
   DISCORD_TOKEN: process.env.DISCORD_TOKEN,
   YOUTUBE_API_KEY: process.env.YOUTUBE_API_KEY,
@@ -62,6 +64,11 @@ export default class Config {
     for (const [key, value] of Object.entries(CONFIG_MAP)) {
       if (typeof value === 'undefined') {
         console.error(`Missing environment variable for ${key}`);
+        process.exit(1);
+      }
+
+      if (REQUIRED_NON_EMPTY.has(key) && typeof value === 'string' && value.trim() === '') {
+        console.error(`Environment variable ${key} is set but empty — check your .env, /config file, or compose environment`);
         process.exit(1);
       }
 

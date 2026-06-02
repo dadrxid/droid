@@ -1,19 +1,22 @@
 version: "3"
 services:
-  muse:
+  droid:
+    image: ghcr.io/dadrxid/droid:latest
     build: .
-    container_name: muse
+    container_name: droid
     restart: unless-stopped
     volumes:
       - /DATA/AppData/muse:/data
+    env_file:
+      - .env
     environment:
+      - DATA_DIR=/data
       - DISCORD_TOKEN=${DISCORD_TOKEN}
       - YOUTUBE_API_KEY=${YOUTUBE_API_KEY}
-      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
-      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
-      - BOT_STATUS=${BOT_STATUS}
-      - BOT_ACTIVITY_TYPE=${BOT_ACTIVITY_TYPE}
-      - BOT_ACTIVITY=${BOT_ACTIVITY}
-      - PLAYLIST_APP_URL=${PLAYLIST_APP_URL}
-      - HOMELAB_API_URL=${HOMELAB_API_URL}
-      - WELCOME_CHANNEL_ID=${WELCOME_CHANNEL_ID}
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID:-}
+      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET:-}
+      - BOT_STATUS=${BOT_STATUS:-online}
+      - BOT_ACTIVITY_TYPE=${BOT_ACTIVITY_TYPE:-LISTENING}
+      - BOT_ACTIVITY=${BOT_ACTIVITY:-music}
+      - PLAYLIST_API_URL=${PLAYLIST_API_URL:-}
+      - HOMELAB_API_URL=${HOMELAB_API_URL:-}
