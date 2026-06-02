@@ -15,6 +15,7 @@ import {generateDependencyReport} from '@discordjs/voice';
 import {REST} from '@discordjs/rest';
 import {Routes} from 'discord-api-types/v10';
 import registerCommandsOnGuild from './utils/register-commands-on-guild.js';
+import {getDiscordSessionLimitResetAt, waitForDiscordSessionLimitReset} from './utils/discord-session-limit.js';
 
 @injectable()
 export default class {
@@ -167,13 +168,27 @@ export default class {
     this.client.on('voiceStateUpdate', handleVoiceStateUpdate);
     this.client.on('guildMemberAdd', handleGuildMemberAdd);
 
-    try {
-      await this.client.login(this.config.DISCORD_TOKEN);
-    } catch (error: unknown) {
-      spinner.fail('Failed to log in to Discord');
-      console.error(error);
-      console.error('Check DISCORD_TOKEN is valid and was not reset in the Discord Developer Portal.');
-      process.exit(1);
+    for (;;) {
+      try {
+        // eslint-disable-next-line no-await-in-loop -- intentional backoff when Discord rate-limits session starts
+        await this.client.login(this.config.DISCORD_TOKEN);
+        break;
+      } catch (error: unknown) {
+        const resetAt = getDiscordSessionLimitResetAt(error);
+
+        if (resetAt) {
+          spinner.stop();
+          // eslint-disable-next-line no-await-in-loop -- must wait for Discord's reset window
+          await waitForDiscordSessionLimitReset(resetAt);
+          spinner.start('📡 connecting to Discord...');
+          continue;
+        }
+
+        spinner.fail('Failed to log in to Discord');
+        console.error(error);
+        console.error('Check DISCORD_TOKEN is valid and was not reset in the Discord Developer Portal.');
+        process.exit(1);
+      }
     }
   }
 }
