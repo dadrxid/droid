@@ -62,7 +62,7 @@ jobs:
           fi
 
           if [ -z "${release_tag}" ]; then
-            default_branch="$(gh repo view --repo "${GITHUB_REPOSITORY}" --json defaultBranchRef --jq .defaultBranchRef.name)"
+            default_branch="$(gh repo view --repo "${GITHUB_REPOSITORY}" --json defaultBranchRef --jq .defaultBranchRef.name 2>/dev/null || echo master)"
             app_version="$(curl -fsSL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${default_branch}/package.json" | jq -r '.version')"
             if [ -z "${app_version}" ] || [ "${app_version}" = "null" ]; then
               echo "Could not resolve version from package.json on ${default_branch}" >&2

@@ -7,7 +7,7 @@ import {getSizeWithoutBots} from '../utils/channels.js';
 import {getGuildSettings} from '../utils/get-guild-settings.js';
 
 export default async (oldState: VoiceState, newState: VoiceState): Promise<void> => {
-  const guild = oldState.guild;
+  const {guild} = oldState;
   const botMember = guild.members.me;
 
   if (!botMember?.voice.channelId) {

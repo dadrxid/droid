@@ -129,6 +129,7 @@ export default class implements Command {
       time: 2 * 60 * 1000,
     });
 
+    // eslint-disable-next-line complexity -- playlist queue flow is intentionally sequential
     collector.on('collect', async (i: StringSelectMenuInteraction) => {
       if (i.user.id !== interaction.user.id) {
         await i.reply({content: 'only the person who ran this command can pick a playlist', ephemeral: true});
@@ -149,6 +150,7 @@ export default class implements Command {
         if (!res.ok) {
           res = await fetch(`${PLAYLIST_API}/api/bot/playlist/${encodeURIComponent(playlistName)}?user=${ownerId}`);
         }
+
         if (res.ok) {
           const data = await res.json() as {name: string; tracks: typeof tracks};
           tracks = data.tracks;
@@ -194,6 +196,7 @@ export default class implements Command {
         await player.connect(targetVoiceChannel);
         await player.play();
       }
+
       await new Promise<void>(resolve => {
         setTimeout(resolve, 1500);
       });

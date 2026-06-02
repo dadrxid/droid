@@ -1,5 +1,5 @@
 import {SlashCommandBuilder} from '@discordjs/builders';
-import {ChatInputCommandInteraction, PermissionFlagsBits} from 'discord.js';
+import {ChannelType, ChatInputCommandInteraction, PermissionFlagsBits} from 'discord.js';
 import {injectable} from 'inversify';
 import Command from './index.js';
 import {prisma} from '../utils/db.js';
@@ -31,9 +31,9 @@ export default class implements Command {
 
     switch (subcommand) {
       case 'set': {
-        const channel = interaction.options.getChannel('channel')!;
+        const channel = interaction.options.getChannel('channel', true);
 
-        if (!channel.isTextBased()) {
+        if (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement) {
           await interaction.reply({content: '🚫 welcome messages must be sent to a text channel', ephemeral: true});
           return;
         }
