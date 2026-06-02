@@ -53,6 +53,11 @@ export default class implements Command {
       const collector = msg.createMessageComponentCollector({time: 5 * 60 * 1000});
 
       collector.on('collect', async i => {
+        if (i.user.id !== interaction.user.id) {
+          await i.reply({content: 'only the person who ran this command can use these controls', ephemeral: true});
+          return;
+        }
+
         if (!i.guild) {
           return;
         }
@@ -78,6 +83,12 @@ export default class implements Command {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           components: p.getCurrent() ? [buildPlayerButtons(p)] as any : [],
         });
+      });
+
+      collector.on('end', async () => {
+        try {
+          await msg.edit({components: []});
+        } catch {}
       });
     } catch (_: unknown) {
       throw new Error('no song to skip to');

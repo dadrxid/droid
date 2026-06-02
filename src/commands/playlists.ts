@@ -5,11 +5,12 @@ import {TYPES} from '../types.js';
 import Command from './index.js';
 import PlayerManager from '../managers/player.js';
 import {getMemberVoiceChannel, getMostPopularVoiceChannel} from '../utils/channels.js';
+import {getGuildSettings} from '../utils/get-guild-settings.js';
 import {buildPlayingMessageEmbed, buildPlayerButtons} from '../utils/build-embed.js';
 import {prettyTime} from '../utils/time.js';
 
 const PLAYLIST_API = process.env.PLAYLIST_API_URL ?? 'https://playlist.droidlab.org';
-const HOMELAB_API = 'https://api.droidlab.org';
+const HOMELAB_API = process.env.HOMELAB_API_URL ?? 'https://api.droidlab.org';
 
 @injectable()
 export default class implements Command {
@@ -144,7 +145,10 @@ export default class implements Command {
       let tracks: Array<{title: string; artist: string; url: string; source: string; duration: number; thumbnail: string}> = [];
 
       try {
-        const res = await fetch(`${PLAYLIST_API}/api/bot/playlist/${encodeURIComponent(playlistName)}?user=${ownerId}`);
+        let res = await fetch(`${PLAYLIST_API}/api/bot/playlist/${playlistId}?user=${ownerId}`);
+        if (!res.ok) {
+          res = await fetch(`${PLAYLIST_API}/api/bot/playlist/${encodeURIComponent(playlistName)}?user=${ownerId}`);
+        }
         if (res.ok) {
           const data = await res.json() as {name: string; tracks: typeof tracks};
           tracks = data.tracks;
@@ -162,11 +166,15 @@ export default class implements Command {
         return;
       }
 
-      const player = this.playerManager.get(interaction.guild!.id);
+      const guildId = interaction.guild!.id;
+      const {playlistLimit} = await getGuildSettings(guildId);
+      const tracksToQueue = tracks.slice(0, playlistLimit);
+
+      const player = this.playerManager.get(guildId);
       const [targetVoiceChannel] = getMemberVoiceChannel(interaction.member as GuildMember) ?? getMostPopularVoiceChannel(interaction.guild!);
       const wasPlaying = player.getCurrent() !== null;
 
-      for (const track of tracks) {
+      for (const track of tracksToQueue) {
         player.add({
           title: track.title,
           artist: track.artist ?? '',
@@ -184,9 +192,8 @@ export default class implements Command {
 
       if (!wasPlaying) {
         await player.connect(targetVoiceChannel);
+        await player.play();
       }
-
-      await player.play();
       await new Promise<void>(resolve => {
         setTimeout(resolve, 1500);
       });

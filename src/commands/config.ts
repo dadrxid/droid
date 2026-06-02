@@ -264,6 +264,7 @@ export default class implements Command {
           'Default Volume': config.defaultVolume,
           'Default queue page size': config.defaultQueuePageSize,
           'Reduce volume when people speak': config.turnDownVolumeWhenPeopleSpeak ? 'yes' : 'no',
+          'Volume when people speak (target %)': config.turnDownVolumeWhenPeopleSpeakTarget,
         };
 
         let description = '';

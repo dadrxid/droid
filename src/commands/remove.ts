@@ -40,6 +40,10 @@ export default class implements Command {
       throw new Error('range must be at least 1');
     }
 
+    if (position > player.queueSize()) {
+      throw new Error('position is outside the range of the queue');
+    }
+
     player.removeFromQueue(position, range);
 
     await interaction.reply(':wastebasket: removed');

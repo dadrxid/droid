@@ -4,7 +4,7 @@ import {TYPES} from '../types.js';
 import {inject, injectable} from 'inversify';
 import PlayerManager from '../managers/player.js';
 import Command from './index.js';
-import {prettyTime} from '../utils/time.js';
+import {parseTime, prettyTime} from '../utils/time.js';
 import durationStringToSeconds from '../utils/duration-string-to-seconds.js';
 
 @injectable()
@@ -44,7 +44,17 @@ export default class implements Command {
       throw new Error('missing seek value');
     }
 
-    const seekTime = durationStringToSeconds(seekValue);
+    let seekTime = 0;
+
+    if (seekValue.includes(':')) {
+      seekTime = parseTime(seekValue);
+    } else {
+      seekTime = durationStringToSeconds(seekValue);
+    }
+
+    if (!Number.isFinite(seekTime) || seekTime < 0) {
+      throw new Error('invalid seek time');
+    }
 
     if (seekTime + player.getPosition() > currentSong.length) {
       throw new Error('can\'t seek past the end of the song');

@@ -49,6 +49,10 @@ export default class implements Command {
       seekTime = durationStringToSeconds(time);
     }
 
+    if (!Number.isFinite(seekTime) || seekTime < 0) {
+      throw new Error('invalid seek time');
+    }
+
     if (seekTime > currentSong.length) {
       throw new Error('can\'t seek past the end of the song');
     }

@@ -144,12 +144,15 @@ export default class {
   }
 
   disconnect(): void {
+    this.clearDisconnectTimer();
+
     if (this.voiceConnection) {
       if (this.status === STATUS.PLAYING) {
         this.pause();
       }
 
       this.loopCurrentSong = false;
+      this.loopCurrentQueue = false;
       this.voiceConnection.destroy();
       this.audioPlayer?.stop(true);
 
@@ -224,11 +227,7 @@ export default class {
       throw new Error('Queue empty.');
     }
 
-    // Cancel any pending idle disconnection
-    if (this.disconnectTimer) {
-      clearInterval(this.disconnectTimer);
-      this.disconnectTimer = null;
-    }
+    this.clearDisconnectTimer();
 
     // Resume from paused state
     if (this.status === STATUS.PAUSED && currentSong.url === this.nowPlaying?.url) {
@@ -326,6 +325,7 @@ export default class {
 
         const {secondsToWaitAfterQueueEmpties} = settings;
         if (secondsToWaitAfterQueueEmpties !== 0) {
+          this.clearDisconnectTimer();
           this.disconnectTimer = setTimeout(() => {
             // Make sure we are not accidentally playing
             // when disconnecting
@@ -524,11 +524,17 @@ export default class {
     return hasha(url);
   }
 
+  private clearDisconnectTimer(): void {
+    if (this.disconnectTimer) {
+      clearTimeout(this.disconnectTimer);
+      this.disconnectTimer = null;
+    }
+  }
+
   private async getStream(song: QueuedSong, options: {seek?: number; to?: number} = {}): Promise<Readable> {
-    if (this.status === STATUS.PLAYING) {
-      this.audioPlayer?.stop();
-    } else if (this.status === STATUS.PAUSED) {
-      this.audioPlayer?.stop(true);
+    if (this.audioPlayer) {
+      this.audioPlayer.removeAllListeners();
+      this.audioPlayer.stop(true);
     }
 
     if (song.source === MediaSource.HLS) {
@@ -673,8 +679,6 @@ export default class {
 
       if (currentSong) {
         this.add(currentSong);
-      } else {
-        throw new Error('No song currently playing.');
       }
     }
 

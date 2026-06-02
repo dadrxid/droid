@@ -36,6 +36,11 @@ export default class implements Command {
     const collector = msg.createMessageComponentCollector({time: 5 * 60 * 1000});
 
     collector.on('collect', async i => {
+      if (i.user.id !== interaction.user.id) {
+        await i.reply({content: 'only the person who ran this command can use these controls', ephemeral: true});
+        return;
+      }
+
       if (!i.guild) {
         return;
       }

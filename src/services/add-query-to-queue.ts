@@ -86,7 +86,7 @@ export default class AddQueryToQueue {
     }
 
     if (skipCurrentTrack) {
-      void player.forward(1);
+      await player.forward(1);
     }
 
     const firstSong = newSongs[0];
@@ -104,6 +104,11 @@ export default class AddQueryToQueue {
       const collector = msg.createMessageComponentCollector({time: 5 * 60 * 1000});
 
       collector.on('collect', async i => {
+        if (i.user.id !== interaction.user.id) {
+          await i.reply({content: 'only the person who queued this track can use these controls', ephemeral: true});
+          return;
+        }
+
         if (!i.guild) {
           return;
         }

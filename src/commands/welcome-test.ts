@@ -4,7 +4,7 @@ import {injectable} from 'inversify';
 import Command from './index.js';
 import handleGuildMemberAdd from '../events/guild-member-add.js';
 
-const OWNER_ID = '397068987000815616';
+const OWNER_ID = process.env.BOT_OWNER_ID ?? '397068987000815616';
 
 @injectable()
 export default class implements Command {

@@ -3,6 +3,7 @@ import {ChatInputCommandInteraction, PermissionFlagsBits, Role} from 'discord.js
 import {injectable} from 'inversify';
 import Command from './index.js';
 import {prisma} from '../utils/db.js';
+import {getGuildSettings} from '../utils/get-guild-settings.js';
 
 @injectable()
 export default class implements Command {
@@ -42,6 +43,8 @@ export default class implements Command {
           return;
         }
 
+        await getGuildSettings(guildId);
+
         await prisma.setting.update({
           where: {guildId},
           data: {autoRoleId: role.id},
@@ -52,6 +55,8 @@ export default class implements Command {
       }
 
       case 'disable': {
+        await getGuildSettings(guildId);
+
         await prisma.setting.update({
           where: {guildId},
           data: {autoRoleId: null},

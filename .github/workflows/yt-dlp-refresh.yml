@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  REGISTRY_IMAGE: ghcr.io/museofficial/muse
+  REGISTRY_IMAGE: ghcr.io/dadrxid/droid
 
 jobs:
   refresh:
@@ -45,17 +45,32 @@ jobs:
           }
 
           release_tag=""
+          checkout_ref=""
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
             release_tag="$(jq -r '.inputs.release_tag // ""' "${GITHUB_EVENT_PATH}")"
           fi
 
-          if [ -z "${release_tag}" ]; then
-            release_tag="$(gh release view --repo "${GITHUB_REPOSITORY}" --json tagName --jq .tagName)"
+          if [ -n "${release_tag}" ]; then
+            checkout_ref="${release_tag}"
           fi
 
           if [ -z "${release_tag}" ]; then
-            echo "Could not resolve a Muse release tag" >&2
-            exit 1
+            release_tag="$(gh release view --repo "${GITHUB_REPOSITORY}" --json tagName --jq .tagName 2>/dev/null || true)"
+            if [ -n "${release_tag}" ]; then
+              checkout_ref="${release_tag}"
+            fi
+          fi
+
+          if [ -z "${release_tag}" ]; then
+            default_branch="$(gh repo view --repo "${GITHUB_REPOSITORY}" --json defaultBranchRef --jq .defaultBranchRef.name)"
+            app_version="$(curl -fsSL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${default_branch}/package.json" | jq -r '.version')"
+            if [ -z "${app_version}" ] || [ "${app_version}" = "null" ]; then
+              echo "Could not resolve version from package.json on ${default_branch}" >&2
+              exit 1
+            fi
+            release_tag="v${app_version}"
+            checkout_ref="${default_branch}"
+            echo "No GitHub release found; using package.json version ${release_tag} from ${default_branch}"
           fi
 
           app_version="${release_tag#v}"
@@ -71,15 +86,16 @@ jobs:
 
           {
             echo "release_tag=${release_tag}"
+            echo "checkout_ref=${checkout_ref}"
             echo "app_version=${app_version}"
             echo "yt_dlp_version=${yt_dlp_version}"
           } >> "${GITHUB_OUTPUT}"
 
-          echo "Rebuilding Muse ${release_tag} with yt-dlp ${yt_dlp_version}"
+          echo "Rebuilding ${release_tag} (ref ${checkout_ref}) with yt-dlp ${yt_dlp_version}"
 
       - uses: actions/checkout@v6
         with:
-          ref: ${{ steps.versions.outputs.release_tag }}
+          ref: ${{ steps.versions.outputs.checkout_ref }}
 
       - name: Build metadata
         id: build-metadata
@@ -115,7 +131,7 @@ jobs:
             org.opencontainers.image.revision=${{ steps.build-metadata.outputs.source_sha }}
             org.opencontainers.image.created=${{ steps.build-metadata.outputs.build_date }}
             org.opencontainers.image.version=${{ steps.versions.outputs.app_version }}
-            org.opencontainers.image.description=Muse ${{ steps.versions.outputs.app_version }} rebuilt with yt-dlp ${{ steps.versions.outputs.yt_dlp_version }}
+            org.opencontainers.image.description=Droid ${{ steps.versions.outputs.app_version }} rebuilt with yt-dlp ${{ steps.versions.outputs.yt_dlp_version }}
           build-args: |
             YT_DLP_VERSION=${{ steps.versions.outputs.yt_dlp_version }}
             COMMIT_HASH=${{ steps.build-metadata.outputs.source_sha }}

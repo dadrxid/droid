@@ -3,6 +3,7 @@ import {ChatInputCommandInteraction, PermissionFlagsBits} from 'discord.js';
 import {injectable} from 'inversify';
 import Command from './index.js';
 import {prisma} from '../utils/db.js';
+import {getGuildSettings} from '../utils/get-guild-settings.js';
 
 @injectable()
 export default class implements Command {
@@ -32,6 +33,13 @@ export default class implements Command {
       case 'set': {
         const channel = interaction.options.getChannel('channel')!;
 
+        if (!channel.isTextBased()) {
+          await interaction.reply({content: '🚫 welcome messages must be sent to a text channel', ephemeral: true});
+          return;
+        }
+
+        await getGuildSettings(guildId);
+
         await prisma.setting.update({
           where: {guildId},
           data: {welcomeChannelId: channel.id},
@@ -42,6 +50,8 @@ export default class implements Command {
       }
 
       case 'disable': {
+        await getGuildSettings(guildId);
+
         await prisma.setting.update({
           where: {guildId},
           data: {welcomeChannelId: null},

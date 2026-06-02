@@ -7,9 +7,15 @@ import {getSizeWithoutBots} from '../utils/channels.js';
 import {getGuildSettings} from '../utils/get-guild-settings.js';
 
 export default async (oldState: VoiceState, newState: VoiceState): Promise<void> => {
-  const playerManager = container.get<PlayerManager>(TYPES.Managers.Player);
+  const guild = oldState.guild;
+  const botMember = guild.members.me;
 
-  const player = playerManager.get(oldState.guild.id);
+  if (!botMember?.voice.channelId) {
+    return;
+  }
+
+  const playerManager = container.get<PlayerManager>(TYPES.Managers.Player);
+  const player = playerManager.get(guild.id);
 
   if (!player.voiceConnection || player.voiceConnection.state.status !== VoiceConnectionStatus.Ready) {
     return;

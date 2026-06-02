@@ -21,13 +21,11 @@ export default class KeyValueCacheProvider {
     const functionArgs = options.slice(0, options.length - 1);
 
     const {
-      key = JSON.stringify(functionArgs),
+      key: rawKey = JSON.stringify(functionArgs),
       expiresIn,
     } = options[options.length - 1] as Options;
 
-    if (key.length < 4) {
-      throw new Error(`Cache key ${key} is too short.`);
-    }
+    const key = rawKey.length < 4 ? `kv:${rawKey}` : rawKey;
 
     const cachedResult = await prisma.keyValueCache.findUnique({
       where: {
@@ -37,20 +35,24 @@ export default class KeyValueCacheProvider {
 
     if (cachedResult) {
       if (new Date() < cachedResult.expiresAt) {
-        debug(`Cache hit: ${key}`);
-        return JSON.parse(cachedResult.value) as F;
+        try {
+          debug(`Cache hit: ${key}`);
+          return JSON.parse(cachedResult.value) as F;
+        } catch {
+          await prisma.keyValueCache.delete({where: {key}});
+        }
+      } else {
+        await prisma.keyValueCache.delete({
+          where: {
+            key,
+          },
+        });
       }
-
-      await prisma.keyValueCache.delete({
-        where: {
-          key,
-        },
-      });
     }
 
     debug(`Cache miss: ${key}`);
 
-    const result = await func(...options as any[]);
+    const result = await func(...functionArgs);
 
     // Save result
     const value = JSON.stringify(result);

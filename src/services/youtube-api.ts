@@ -178,8 +178,16 @@ export default class {
         },
       );
 
+      if (!items || items.length === 0) {
+        break;
+      }
+
       nextToken = nextPageToken;
       playlistVideos.push(...items);
+
+      if (!nextToken) {
+        break;
+      }
 
       // Start fetching extra details about videos
       // PlaylistItem misses some details, eg. if the video is a livestream

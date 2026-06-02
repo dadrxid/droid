@@ -78,8 +78,13 @@ export default class FileCacheProvider {
       if (stats.size !== 0) {
         await fs.rename(tmpPath, finalPath);
 
-        await prisma.fileCache.create({
-          data: {
+        await prisma.fileCache.upsert({
+          where: {hash},
+          update: {
+            accessedAt: new Date(),
+            bytes: stats.size,
+          },
+          create: {
             hash,
             accessedAt: new Date(),
             bytes: stats.size,
