@@ -70,7 +70,7 @@ container.bind<AddQueryToQueue>(TYPES.Services.AddQueryToQueue).to(AddQueryToQue
 container.bind<YoutubeAPI>(TYPES.Services.YoutubeAPI).to(YoutubeAPI).inSingletonScope();
 
 const config = container.get<ConfigProvider>(TYPES.Config);
-if (config.SPOTIFY_CLIENT_ID !== '' && config.SPOTIFY_CLIENT_SECRET !== '') {
+if (config.SPOTIFY_CLIENT_ID.trim() !== '' && config.SPOTIFY_CLIENT_SECRET.trim() !== '') {
   container.bind<SpotifyAPI>(TYPES.Services.SpotifyAPI).to(SpotifyAPI).inSingletonScope();
   container.bind(TYPES.ThirdParty).to(ThirdParty);
 }
