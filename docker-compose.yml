@@ -8,8 +8,7 @@ services:
     restart: on-failure:5
     volumes:
       - /DATA/AppData/muse:/data
-    env_file:
-      - .env
+    # Set secrets in Portainer → Stack → Environment variables (no .env file in git)
     environment:
       - DATA_DIR=/data
       - DISCORD_TOKEN=${DISCORD_TOKEN}
