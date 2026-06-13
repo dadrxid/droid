@@ -8,6 +8,10 @@ on:
         description: 'Extra image tag to publish (default: stable + package version + commit sha)'
         required: false
         type: string
+  push:
+    branches: [master]
+    paths:
+      - '.github/deploy-stable.trigger'
 
 concurrency:
   group: deploy-stable
