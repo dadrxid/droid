@@ -6,8 +6,11 @@ import Bot from './bot.js';
 import Config from './services/config.js';
 import FileCacheProvider from './services/file-cache.js';
 import prepareYtDlp from './utils/prepare-yt-dlp.js';
+import installProcessStabilityHandlers from './utils/process-stability.js';
 
 const bot = container.get<Bot>(TYPES.Bot);
+
+installProcessStabilityHandlers();
 
 const startBot = async () => {
   // Create data directories if necessary

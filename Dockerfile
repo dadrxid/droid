@@ -63,6 +63,10 @@ RUN yarn build
 # Only keep what's necessary to run
 FROM base AS runner
 
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y procps \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /usr/app
 
 COPY --from=builder /usr/app/dist ./dist
@@ -79,5 +83,8 @@ ENV NODE_ENV=production
 ENV COMMIT_HASH=$COMMIT_HASH
 ENV BUILD_DATE=$BUILD_DATE
 ENV ENV_FILE=/config
+
+HEALTHCHECK --interval=60s --timeout=10s --start-period=120s --retries=3 \
+  CMD pgrep -f "node.*migrate-and-start" || exit 1
 
 CMD ["tini", "--", "node", "--enable-source-maps", "dist/scripts/migrate-and-start.js"]

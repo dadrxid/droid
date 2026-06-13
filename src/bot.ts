@@ -1,6 +1,6 @@
 import {Client, Collection, User} from 'discord.js';
 import {inject, injectable} from 'inversify';
-import ora from 'ora';
+import ora, {Ora} from 'ora';
 import {TYPES} from './types.js';
 import container from './inversify.config.js';
 import Command from './commands/index.js';
@@ -16,17 +16,18 @@ import {REST} from '@discordjs/rest';
 import {Routes} from 'discord-api-types/v10';
 import registerCommandsOnGuild from './utils/register-commands-on-guild.js';
 import {isInvalidDiscordTokenError, waitBeforeDiscordLoginRetry} from './utils/discord-login-retry.js';
+import createDiscordClient from './utils/create-discord-client.js';
+import {setActiveDiscordClient} from './utils/discord-client-holder.js';
 
 @injectable()
 export default class {
-  private readonly client: Client;
+  private client!: Client;
   private readonly config: Config;
   private readonly shouldRegisterCommandsOnBot: boolean;
   private readonly commandsByName!: Collection<string, Command>;
   private readonly commandsByButtonId!: Collection<string, Command>;
 
-  constructor(@inject(TYPES.Client) client: Client, @inject(TYPES.Config) config: Config) {
-    this.client = client;
+  constructor(@inject(TYPES.Config) config: Config) {
     this.config = config;
     this.shouldRegisterCommandsOnBot = config.REGISTER_COMMANDS_ON_BOT;
     this.commandsByName = new Collection();
@@ -34,7 +35,6 @@ export default class {
   }
 
   public async register(): Promise<void> {
-    // Load in commands
     for (const command of container.getAll<Command>(TYPES.Command)) {
       try {
         command.slashCommand.toJSON();
@@ -54,8 +54,53 @@ export default class {
       }
     }
 
+    this.client = createDiscordClient();
+    setActiveDiscordClient(this.client);
+
+    const spinner = ora('📡 connecting to Discord...').start();
+    this.attachClientListeners(this.client, spinner);
+
+    let loginAttempt = 0;
+
+    for (;;) {
+      loginAttempt += 1;
+
+      try {
+        // eslint-disable-next-line no-await-in-loop -- intentional backoff when Discord rate-limits session starts
+        await this.client.login(this.config.DISCORD_TOKEN);
+        break;
+      } catch (error: unknown) {
+        if (isInvalidDiscordTokenError(error)) {
+          spinner.fail('Invalid DISCORD_TOKEN — fix it in Portainer and redeploy');
+          console.error(error);
+          process.exit(1);
+        }
+
+        spinner.stop();
+        this.replaceClient(spinner);
+        // eslint-disable-next-line no-await-in-loop -- must wait between login attempts
+        await waitBeforeDiscordLoginRetry(error, loginAttempt);
+        spinner.start('📡 connecting to Discord...');
+      }
+    }
+  }
+
+  private replaceClient(spinner: Ora): void {
+    try {
+      this.client.removeAllListeners();
+      this.client.destroy();
+    } catch {
+      // ignore cleanup errors before retry
+    }
+
+    this.client = createDiscordClient();
+    setActiveDiscordClient(this.client);
+    this.attachClientListeners(this.client, spinner);
+  }
+
+  private attachClientListeners(client: Client, spinner: Ora): void {
     // eslint-disable-next-line complexity
-    this.client.on('interactionCreate', async interaction => {
+    client.on('interactionCreate', async interaction => {
       try {
         if (interaction.isCommand()) {
           const command = this.commandsByName.get(interaction.commandName);
@@ -112,36 +157,34 @@ export default class {
       }
     });
 
-    const spinner = ora('📡 connecting to Discord...').start();
-
-    this.client.once('ready', async () => {
+    client.once('ready', async () => {
       debug(generateDependencyReport());
 
       const rest = new REST({version: '10'}).setToken(this.config.DISCORD_TOKEN);
       if (this.shouldRegisterCommandsOnBot) {
         spinner.text = '📡 updating commands on bot...';
         await rest.put(
-          Routes.applicationCommands(this.client.user!.id),
+          Routes.applicationCommands(client.user!.id),
           {body: this.commandsByName.map(command => command.slashCommand.toJSON())},
         );
       } else {
         spinner.text = '📡 updating commands in all guilds...';
 
         await Promise.all([
-          ...this.client.guilds.cache.map(async guild => {
+          ...client.guilds.cache.map(async guild => {
             await registerCommandsOnGuild({
               rest,
               guildId: guild.id,
-              applicationId: this.client.user!.id,
+              applicationId: client.user!.id,
               commands: this.commandsByName.map(c => c.slashCommand),
             });
           }),
-          rest.put(Routes.applicationCommands(this.client.user!.id), {body: []}),
+          rest.put(Routes.applicationCommands(client.user!.id), {body: []}),
         ],
         );
       }
 
-      this.client.user!.setPresence({
+      client.user!.setPresence({
         activities: [
           {
             name: this.config.BOT_ACTIVITY,
@@ -152,56 +195,26 @@ export default class {
         status: this.config.BOT_STATUS,
       });
 
-      spinner.succeed(`Ready! Invite the bot with https://discordapp.com/oauth2/authorize?client_id=${this.client.user?.id ?? ''}&scope=bot%20applications.commands&permissions=36700160`);
+      spinner.succeed(`Ready! Invite the bot with https://discordapp.com/oauth2/authorize?client_id=${client.user?.id ?? ''}&scope=bot%20applications.commands&permissions=36700160`);
     });
 
-    this.client.on('error', console.error);
-    this.client.on('debug', debug);
-    this.client.on('shardDisconnect', (event, shardId) => {
-      console.warn(`Discord shard ${String(shardId)} disconnected (${event.code}): ${event.reason || 'no reason'} — discord.js will try to reconnect`);
+    client.on('error', console.error);
+    client.on('debug', debug);
+    client.on('shardDisconnect', (event, shardId) => {
+      console.warn(`Discord shard ${String(shardId)} disconnected (${event.code}): ${event.reason || 'no reason'} — reconnecting automatically`);
     });
-    this.client.on('shardReconnect', shardId => {
+    client.on('shardReconnect', shardId => {
       console.warn(`Discord shard ${String(shardId)} reconnecting...`);
     });
-    this.client.on('shardResume', (shardId, replayedEvents) => {
+    client.on('shardResume', (shardId, replayedEvents) => {
       console.warn(`Discord shard ${String(shardId)} resumed (${String(replayedEvents)} events replayed)`);
     });
-    this.client.on('shardError', (error, shardId) => {
+    client.on('shardError', (error, shardId) => {
       console.error(`Discord shard ${shardId} error:`, error);
     });
 
-    this.client.on('guildCreate', handleGuildCreate);
-    this.client.on('voiceStateUpdate', handleVoiceStateUpdate);
-    this.client.on('guildMemberAdd', handleGuildMemberAdd);
-
-    let loginAttempt = 0;
-
-    for (;;) {
-      loginAttempt += 1;
-
-      try {
-        // eslint-disable-next-line no-await-in-loop -- intentional backoff when Discord rate-limits session starts
-        await this.client.login(this.config.DISCORD_TOKEN);
-        break;
-      } catch (error: unknown) {
-        if (isInvalidDiscordTokenError(error)) {
-          spinner.fail('Invalid DISCORD_TOKEN — fix it in Portainer and redeploy');
-          console.error(error);
-          process.exit(1);
-        }
-
-        spinner.stop();
-
-        try {
-          this.client.destroy();
-        } catch {
-          // ignore cleanup errors before retry
-        }
-
-        // eslint-disable-next-line no-await-in-loop -- must wait between login attempts
-        await waitBeforeDiscordLoginRetry(error, loginAttempt);
-        spinner.start('📡 connecting to Discord...');
-      }
-    }
+    client.on('guildCreate', handleGuildCreate);
+    client.on('voiceStateUpdate', handleVoiceStateUpdate);
+    client.on('guildMemberAdd', handleGuildMemberAdd);
   }
 }

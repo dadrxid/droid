@@ -1,6 +1,7 @@
 name: Build snapshot of PR
 
-on: pull_request
+on:
+  workflow_dispatch:
 
 env:
   REGISTRY_IMAGE: ghcr.io/dadrxid/droid

@@ -1,8 +1,10 @@
 import 'reflect-metadata';
 import {Container} from 'inversify';
 import {TYPES} from './types.js';
+import {Client} from 'discord.js';
 import Bot from './bot.js';
-import {Client, GatewayIntentBits} from 'discord.js';
+import createDiscordClient from './utils/create-discord-client.js';
+import {getActiveDiscordClient, setActiveDiscordClient} from './utils/discord-client-holder.js';
 import ConfigProvider from './services/config.js';
 
 // Managers
@@ -49,16 +51,12 @@ import KeyValueCacheProvider from './services/key-value-cache.js';
 
 const container = new Container();
 
-// Intents
-const intents: GatewayIntentBits[] = [];
-intents.push(GatewayIntentBits.Guilds);
-intents.push(GatewayIntentBits.GuildMembers);
-intents.push(GatewayIntentBits.GuildMessageReactions);
-intents.push(GatewayIntentBits.GuildVoiceStates);
+const initialClient = createDiscordClient();
+setActiveDiscordClient(initialClient);
 
 // Bot
 container.bind<Bot>(TYPES.Bot).to(Bot).inSingletonScope();
-container.bind<Client>(TYPES.Client).toConstantValue(new Client({intents}));
+container.bind<Client>(TYPES.Client).toDynamicValue(() => getActiveDiscordClient());
 
 // Managers
 container.bind<PlayerManager>(TYPES.Managers.Player).to(PlayerManager).inSingletonScope();

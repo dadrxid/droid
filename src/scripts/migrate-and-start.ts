@@ -9,11 +9,11 @@ import logBanner from '../utils/log-banner.js';
 import createDatabaseUrl, {createDatabasePath} from '../utils/create-database-url.js';
 import {DATA_DIR} from '../services/config.js';
 
+import installProcessStabilityHandlers from '../utils/process-stability.js';
+
 process.env.DATABASE_URL = process.env.DATABASE_URL ?? createDatabaseUrl(DATA_DIR);
 
-process.on('unhandledRejection', (reason: unknown) => {
-  console.error('Unhandled promise rejection (bot will stay up if possible):', reason);
-});
+installProcessStabilityHandlers();
 
 const migrateFromSequelizeToPrisma = async () => {
   await execa('prisma', ['migrate', 'resolve', '--applied', '20220101155430_migrate_from_sequelize'], {preferLocal: true});
