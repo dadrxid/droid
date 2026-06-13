@@ -26,6 +26,8 @@ export default class {
   private readonly shouldRegisterCommandsOnBot: boolean;
   private readonly commandsByName!: Collection<string, Command>;
   private readonly commandsByButtonId!: Collection<string, Command>;
+  private isReconnecting = false;
+  private heartbeatTimer: NodeJS.Timeout | null = null;
 
   constructor(@inject(TYPES.Config) config: Config) {
     this.config = config;
@@ -59,7 +61,10 @@ export default class {
 
     const spinner = ora('📡 connecting to Discord...').start();
     this.attachClientListeners(this.client, spinner);
+    await this.loginUntilReady(spinner);
+  }
 
+  private async loginUntilReady(spinner: Ora): Promise<void> {
     let loginAttempt = 0;
 
     for (;;) {
@@ -68,7 +73,7 @@ export default class {
       try {
         // eslint-disable-next-line no-await-in-loop -- intentional backoff when Discord rate-limits session starts
         await this.client.login(this.config.DISCORD_TOKEN);
-        break;
+        return;
       } catch (error: unknown) {
         if (isInvalidDiscordTokenError(error)) {
           spinner.fail('Invalid DISCORD_TOKEN — fix it in Portainer and redeploy');
@@ -85,7 +90,61 @@ export default class {
     }
   }
 
+  private clearHeartbeat(): void {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+  }
+
+  private startHeartbeat(client: Client, spinner: Ora): void {
+    this.clearHeartbeat();
+
+    let missedHeartbeats = 0;
+
+    this.heartbeatTimer = setInterval(() => {
+      if (client !== this.client) {
+        this.clearHeartbeat();
+        return;
+      }
+
+      if (client.isReady()) {
+        missedHeartbeats = 0;
+        debug(`Discord heartbeat: ping ${client.ws.ping}ms, ${String(client.guilds.cache.size)} guilds`);
+        return;
+      }
+
+      missedHeartbeats += 1;
+      console.warn(`Discord client not ready (${missedHeartbeats}/5 heartbeat checks)`);
+
+      if (missedHeartbeats >= 5 && !this.isReconnecting) {
+        missedHeartbeats = 0;
+        void this.reconnectClient(spinner);
+      }
+    }, 60_000);
+  }
+
+  private async reconnectClient(spinner: Ora): Promise<void> {
+    if (this.isReconnecting) {
+      return;
+    }
+
+    this.isReconnecting = true;
+
+    try {
+      console.warn('Discord connection lost — recreating client instead of exiting...');
+      spinner.stop();
+      this.replaceClient(spinner);
+      spinner.start('📡 reconnecting to Discord...');
+      await this.loginUntilReady(spinner);
+    } finally {
+      this.isReconnecting = false;
+    }
+  }
+
   private replaceClient(spinner: Ora): void {
+    this.clearHeartbeat();
+
     try {
       this.client.removeAllListeners();
       this.client.destroy();
@@ -196,6 +255,7 @@ export default class {
       });
 
       spinner.succeed(`Ready! Invite the bot with https://discordapp.com/oauth2/authorize?client_id=${client.user?.id ?? ''}&scope=bot%20applications.commands&permissions=36700160`);
+      this.startHeartbeat(client, spinner);
     });
 
     client.on('error', console.error);

@@ -104,7 +104,7 @@ jobs:
             "${REGISTRY_IMAGE}:${version}"
             "${REGISTRY_IMAGE}:${minor}"
             "${REGISTRY_IMAGE}:${major}"
-            "${REGISTRY_IMAGE}:latest"
+            "${REGISTRY_IMAGE}:stable"
           )
           printf 'ghcr=%s\n' "$(IFS=,; echo "${ghcr_tags[*]}")" >> "$GITHUB_OUTPUT"
 
@@ -113,7 +113,7 @@ jobs:
               "${DOCKERHUB_USERNAME}/droid:${version}"
               "${DOCKERHUB_USERNAME}/droid:${minor}"
               "${DOCKERHUB_USERNAME}/droid:${major}"
-              "${DOCKERHUB_USERNAME}/droid:latest"
+              "${DOCKERHUB_USERNAME}/droid:stable"
             )
             printf 'dockerhub=%s\n' "$(IFS=,; echo "${dockerhub_tags[*]}")" >> "$GITHUB_OUTPUT"
           fi

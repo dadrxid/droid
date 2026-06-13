@@ -1,5 +1,6 @@
 name: CI
 
+# Verify only — never publishes images. Broken upstream merges cannot overwrite production.
 on:
   push:
     branches: [master]
@@ -10,12 +11,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify-and-publish:
-    name: Lint, Type Check, and Docker
+  verify:
+    name: Lint, Type Check, and Docker Build Test
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
     steps:
       - uses: actions/checkout@v6
 
@@ -29,33 +27,23 @@ jobs:
           HUSKY: '0'
         run: yarn install --frozen-lockfile
 
+      - name: Verify lockfile is in sync
+        env:
+          HUSKY: '0'
+        run: |
+          cp yarn.lock yarn.lock.check
+          yarn install --ignore-scripts
+          diff -q yarn.lock yarn.lock.check
+
       - run: yarn prisma generate
       - run: yarn lint
       - run: yarn typecheck
 
-      - name: Log in to GitHub Container Registry
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Docker meta
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-        id: meta
-        run: |
-          version="$(node -p "require('./package.json').version")"
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-          echo "tags=ghcr.io/dadrxid/droid:latest,ghcr.io/dadrxid/droid:${version},ghcr.io/dadrxid/droid:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-
-      - name: Build and push
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+      - name: Verify Docker image builds
         uses: docker/build-push-action@v7
         with:
           context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          push: false
           build-args: |
             COMMIT_HASH=${{ github.sha }}
             BUILD_DATE=${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}

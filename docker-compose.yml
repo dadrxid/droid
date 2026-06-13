@@ -1,10 +1,10 @@
 version: "3"
 services:
   droid:
-    # Pin to a version tag for stability, e.g. ghcr.io/dadrxid/droid:2.11.4
-    image: ghcr.io/dadrxid/droid:latest
+    # NEVER use :latest in production — it auto-updates when CI/deploy runs.
+    # Update only after manually running "Deploy Stable" in GitHub Actions, then pull this tag.
+    image: ghcr.io/dadrxid/droid:stable
     container_name: droid
-    # on-failure avoids hammering Discord when login is rate-limited
     restart: on-failure:5
     volumes:
       - /DATA/AppData/muse:/data

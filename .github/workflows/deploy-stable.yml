@@ -1,0 +1,72 @@
+name: Deploy Stable
+
+# Manual production deploy — only you decide when Portainer should get a new image.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Extra image tag to publish (default: stable + package version + commit sha)'
+        required: false
+        type: string
+
+concurrency:
+  group: deploy-stable
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify before deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        env:
+          HUSKY: '0'
+        run: yarn install --frozen-lockfile
+
+      - run: yarn prisma generate
+      - run: yarn lint
+      - run: yarn typecheck
+
+  publish:
+    name: Build and push stable image
+    runs-on: ubuntu-latest
+    needs: verify
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker meta
+        id: meta
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          tags="ghcr.io/dadrxid/droid:stable,ghcr.io/dadrxid/droid:${version},ghcr.io/dadrxid/droid:${GITHUB_SHA}"
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            tags="${tags},ghcr.io/dadrxid/droid:${{ github.event.inputs.tag }}"
+          fi
+          echo "tags=${tags}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          build-args: |
+            COMMIT_HASH=${{ github.sha }}
+            BUILD_DATE=${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}

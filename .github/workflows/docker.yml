@@ -25,7 +25,7 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/dadrxid/droid:latest
+            ghcr.io/dadrxid/droid:stable
             ghcr.io/dadrxid/droid:${{ env.VERSION }}
           build-args: |
             COMMIT_HASH=${{ github.sha }}

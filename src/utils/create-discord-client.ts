@@ -8,5 +8,8 @@ const intents = [
 ];
 
 export default function createDiscordClient(): Client {
-  return new Client({intents});
+  return new Client({
+    intents,
+    rest: {timeout: 30_000},
+  });
 }
