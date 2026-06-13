@@ -123,7 +123,7 @@ export default class implements Command {
     }
 
     if (favorite.query.includes('spotify.com') || favorite.query.startsWith('spotify:')) {
-      throw new Error('Spotify links are no longer supported — update this favorite with a YouTube URL or search query');
+      throw new Error('Spotify is not supported — update this favorite with a YouTube URL or search query');
     }
 
     await this.addQueryToQueue.addToQueue({

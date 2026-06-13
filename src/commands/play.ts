@@ -1,12 +1,10 @@
 import {AutocompleteInteraction, ChatInputCommandInteraction} from 'discord.js';
 import {URL} from 'url';
 import {SlashCommandBuilder, SlashCommandSubcommandsOnlyBuilder} from '@discordjs/builders';
-import {inject, injectable, optional} from 'inversify';
-import Spotify from 'spotify-web-api-node';
+import {inject, injectable} from 'inversify';
 import Command from './index.js';
 import {TYPES} from '../types.js';
-import ThirdParty from '../services/third-party.js';
-import getYouTubeAndSpotifySuggestionsFor from '../utils/get-youtube-and-spotify-suggestions-for.js';
+import getYouTubeAutocompleteSuggestions from '../utils/get-youtube-autocomplete-suggestions.js';
 import KeyValueCacheProvider from '../services/key-value-cache.js';
 import {ONE_HOUR_IN_SECONDS} from '../utils/constants.js';
 import AddQueryToQueue from '../services/add-query-to-queue.js';
@@ -17,12 +15,10 @@ export default class implements Command {
 
   public requiresVC = true;
 
-  private readonly spotify?: Spotify;
   private readonly cache: KeyValueCacheProvider;
   private readonly addQueryToQueue: AddQueryToQueue;
 
-  constructor(@inject(TYPES.ThirdParty) @optional() thirdParty: ThirdParty, @inject(TYPES.KeyValueCache) cache: KeyValueCacheProvider, @inject(TYPES.Services.AddQueryToQueue) addQueryToQueue: AddQueryToQueue) {
-    this.spotify = thirdParty?.spotify;
+  constructor(@inject(TYPES.KeyValueCache) cache: KeyValueCacheProvider, @inject(TYPES.Services.AddQueryToQueue) addQueryToQueue: AddQueryToQueue) {
     this.cache = cache;
     this.addQueryToQueue = addQueryToQueue;
 
@@ -53,7 +49,7 @@ export default class implements Command {
 
     if (query.includes('spotify.com') || query.startsWith('spotify:')) {
       await interaction.reply({
-        content: '🚫 Spotify links are no longer supported due to Spotify API changes.\nUse a YouTube URL or search query instead.\nTo play your Spotify playlists, convert them at **tunemymusic.com** then paste the YouTube URL.',
+        content: '🚫 Spotify is not supported — use a YouTube URL or search query instead.',
         ephemeral: true,
       });
 
@@ -88,9 +84,8 @@ export default class implements Command {
     } catch {}
 
     const suggestions = await this.cache.wrap(
-      getYouTubeAndSpotifySuggestionsFor,
+      getYouTubeAutocompleteSuggestions,
       query,
-      this.spotify,
       10,
       {
         expiresIn: ONE_HOUR_IN_SECONDS,
