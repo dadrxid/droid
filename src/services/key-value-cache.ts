@@ -54,6 +54,10 @@ export default class KeyValueCacheProvider {
 
     const result = await func(...functionArgs);
 
+    if (result === undefined) {
+      return result;
+    }
+
     // Save result
     const value = JSON.stringify(result);
     const expiresAt = futureTimeToDate(expiresIn);

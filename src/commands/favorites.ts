@@ -1,5 +1,6 @@
 import {SlashCommandBuilder} from '@discordjs/builders';
 import {APIEmbedField, AutocompleteInteraction, ChatInputCommandInteraction} from 'discord.js';
+import Prisma from '@prisma/client';
 import {inject, injectable} from 'inversify';
 import Command from './index.js';
 import AddQueryToQueue from '../services/add-query-to-queue.js';
@@ -121,6 +122,10 @@ export default class implements Command {
       throw new Error('no favorite with that name exists');
     }
 
+    if (favorite.query.includes('spotify.com') || favorite.query.startsWith('spotify:')) {
+      throw new Error('Spotify links are no longer supported — update this favorite with a YouTube URL or search query');
+    }
+
     await this.addQueryToQueue.addToQueue({
       interaction,
       query: favorite.query,
@@ -174,14 +179,22 @@ export default class implements Command {
       throw new Error('a favorite with that name already exists');
     }
 
-    await prisma.favoriteQuery.create({
-      data: {
-        authorId: interaction.member!.user.id,
-        guildId: interaction.guild!.id,
-        name,
-        query,
-      },
-    });
+    try {
+      await prisma.favoriteQuery.create({
+        data: {
+          authorId: interaction.member!.user.id,
+          guildId: interaction.guild!.id,
+          name,
+          query,
+        },
+      });
+    } catch (error: unknown) {
+      if (error instanceof Prisma.Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new Error('a favorite with that name already exists');
+      }
+
+      throw error;
+    }
 
     await interaction.reply('👍 favorite created');
   }

@@ -100,7 +100,7 @@ export const buildQueueEmbed = (player: Player, page: number, pageSize: number):
   }
 
   const queueSize = player.queueSize();
-  const maxQueuePage = Math.ceil((queueSize + 1) / pageSize);
+  const maxQueuePage = Math.max(1, Math.ceil(queueSize / pageSize));
 
   if (page > maxQueuePage) {
     throw new Error('the queue isn\'t that big');

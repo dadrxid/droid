@@ -15,6 +15,7 @@ export default class implements Command {
     .addIntegerOption(option => option
       .setName('page')
       .setDescription('page of queue to show [default: 1]')
+      .setMinValue(1)
       .setRequired(false))
     .addIntegerOption(option => option
       .setName('page-size')
@@ -37,7 +38,8 @@ export default class implements Command {
 
     let currentPage = interaction.options.getInteger('page') ?? 1;
     const queueSize = player.queueSize();
-    const maxPage = Math.ceil((queueSize + 1) / pageSize);
+    const maxPage = Math.max(1, Math.ceil(queueSize / pageSize));
+    currentPage = Math.min(Math.max(currentPage, 1), maxPage);
 
     const embed = buildQueueEmbed(player, currentPage, pageSize);
     const buttons = this.buildPageButtons(currentPage, maxPage);
@@ -56,6 +58,11 @@ export default class implements Command {
     const collector = msg.createMessageComponentCollector({time: 5 * 60 * 1000});
 
     collector.on('collect', async i => {
+      if (i.user.id !== interaction.user.id) {
+        await i.reply({content: 'only the person who ran this command can navigate pages', ephemeral: true});
+        return;
+      }
+
       if (i.customId === 'queue_prev' && currentPage > 1) {
         currentPage--;
       } else if (i.customId === 'queue_next' && currentPage < maxPage) {

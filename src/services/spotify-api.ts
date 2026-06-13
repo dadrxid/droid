@@ -69,7 +69,7 @@ export default class {
   private toSpotifyTrack(track: SpotifyApi.TrackObjectSimplified): SpotifyTrack {
     return {
       name: track.name,
-      artist: track.artists[0].name,
+      artist: track.artists[0]?.name ?? 'Unknown Artist',
     };
   }
 

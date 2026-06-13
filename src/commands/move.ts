@@ -7,6 +7,8 @@ import {SlashCommandBuilder} from '@discordjs/builders';
 
 @injectable()
 export default class implements Command {
+  public requiresVC = true;
+
   public readonly slashCommand = new SlashCommandBuilder()
     .setName('move')
     .setDescription('move songs within the queue')

@@ -11,10 +11,24 @@ import {FileCache} from '@prisma/client';
 @injectable()
 export default class FileCacheProvider {
   private static readonly evictionQueue = new PQueue({concurrency: 1});
+  private static readonly inUseHashes = new Set<string>();
+  private static readonly activeWrites = new Set<string>();
   private readonly config: Config;
 
   constructor(@inject(TYPES.Config) config: Config) {
     this.config = config;
+  }
+
+  markInUse(hash: string): void {
+    FileCacheProvider.inUseHashes.add(hash);
+  }
+
+  releaseInUse(hash: string): void {
+    FileCacheProvider.inUseHashes.delete(hash);
+  }
+
+  isWriteInProgress(hash: string): boolean {
+    return FileCacheProvider.activeWrites.has(hash);
   }
 
   /**
@@ -69,30 +83,42 @@ export default class FileCacheProvider {
     const tmpPath = path.join(this.config.CACHE_DIR, 'tmp', hash);
     const finalPath = path.join(this.config.CACHE_DIR, hash);
 
+    FileCacheProvider.activeWrites.add(hash);
+
     const stream = createWriteStream(tmpPath);
 
     stream.on('close', async () => {
-      // Only move if size is non-zero (may have errored out)
-      const stats = await fs.stat(tmpPath);
+      try {
+        const stats = await fs.stat(tmpPath);
 
-      if (stats.size !== 0) {
-        await fs.rename(tmpPath, finalPath);
+        if (stats.size !== 0) {
+          await fs.rename(tmpPath, finalPath);
 
-        await prisma.fileCache.upsert({
-          where: {hash},
-          update: {
-            accessedAt: new Date(),
-            bytes: stats.size,
-          },
-          create: {
-            hash,
-            accessedAt: new Date(),
-            bytes: stats.size,
-          },
-        });
+          await prisma.fileCache.upsert({
+            where: {hash},
+            update: {
+              accessedAt: new Date(),
+              bytes: stats.size,
+            },
+            create: {
+              hash,
+              accessedAt: new Date(),
+              bytes: stats.size,
+            },
+          });
+        }
+
+        await this.evictOldestIfNecessary();
+      } catch (error: unknown) {
+        debug(`Failed to finalize cache write for ${hash}:`, error);
+        try {
+          await fs.unlink(tmpPath);
+        } catch {
+          // ignore cleanup errors
+        }
+      } finally {
+        FileCacheProvider.activeWrites.delete(hash);
       }
-
-      await this.evictOldestIfNecessary();
     });
 
     return stream;
@@ -122,23 +148,28 @@ export default class FileCacheProvider {
     // Continue to evict until we're under the limit
     /* eslint-disable no-await-in-loop */
     while (totalSizeBytes > this.config.CACHE_LIMIT_IN_BYTES) {
+      const inUse = [...FileCacheProvider.inUseHashes];
+
       const oldest = await prisma.fileCache.findFirst({
+        where: inUse.length > 0 ? {hash: {notIn: inUse}} : undefined,
         orderBy: {
           accessedAt: 'asc',
         },
 
       });
 
-      if (oldest) {
-        await prisma.fileCache.delete({
-          where: {
-            hash: oldest.hash,
-          },
-        });
-        await fs.unlink(path.join(this.config.CACHE_DIR, oldest.hash));
-        debug(`${oldest.hash} has been evicted`);
-        numOfEvictedFiles++;
+      if (!oldest) {
+        break;
       }
+
+      await prisma.fileCache.delete({
+        where: {
+          hash: oldest.hash,
+        },
+      });
+      await fs.unlink(path.join(this.config.CACHE_DIR, oldest.hash));
+      debug(`${oldest.hash} has been evicted`);
+      numOfEvictedFiles++;
 
       totalSizeBytes = await this.getDiskUsageInBytes();
     }
@@ -207,31 +238,34 @@ export default class FileCacheProvider {
    */
   private getFindAllIterable() {
     const limit = 50;
-    let previousCreatedAt: Date | null = null;
+    let previousCursor: {createdAt: Date; hash: string} | null = null;
 
     let models: FileCache[] = [];
 
     const fetchNextBatch = async () => {
       let where;
 
-      if (previousCreatedAt) {
+      if (previousCursor) {
         where = {
-          createdAt: {
-            gt: previousCreatedAt,
-          },
+          OR: [
+            {createdAt: {gt: previousCursor.createdAt}},
+            {createdAt: previousCursor.createdAt, hash: {gt: previousCursor.hash}},
+          ],
         };
       }
 
       models = await prisma.fileCache.findMany({
         where,
-        orderBy: {
-          createdAt: 'asc',
-        },
+        orderBy: [
+          {createdAt: 'asc'},
+          {hash: 'asc'},
+        ],
         take: limit,
       });
 
       if (models.length > 0) {
-        previousCreatedAt = models[models.length - 1].createdAt;
+        const last = models[models.length - 1];
+        previousCursor = {createdAt: last.createdAt, hash: last.hash};
       }
     };
 

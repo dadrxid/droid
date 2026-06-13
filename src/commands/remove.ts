@@ -7,6 +7,8 @@ import {SlashCommandBuilder} from '@discordjs/builders';
 
 @injectable()
 export default class implements Command {
+  public requiresVC = true;
+
   public readonly slashCommand = new SlashCommandBuilder()
     .setName('remove')
     .setDescription('remove songs from the queue')
@@ -42,6 +44,10 @@ export default class implements Command {
 
     if (position > player.queueSize()) {
       throw new Error('position is outside the range of the queue');
+    }
+
+    if (position + range - 1 > player.queueSize()) {
+      throw new Error('range extends past the end of the queue');
     }
 
     player.removeFromQueue(position, range);

@@ -32,6 +32,12 @@ export default class implements Command {
     switch (subcommand) {
       case 'set': {
         const role = interaction.options.getRole('role') as Role;
+        const {members: {me}} = interaction.guild!;
+
+        if (!me?.permissions.has(PermissionFlagsBits.ManageRoles)) {
+          await interaction.reply({content: '🚫 I need the **Manage Roles** permission to assign auto roles', ephemeral: true});
+          return;
+        }
 
         if (role.managed) {
           await interaction.reply({content: '🚫 that role is managed by an integration and cannot be assigned', ephemeral: true});
@@ -40,6 +46,11 @@ export default class implements Command {
 
         if (role.id === interaction.guild!.roles.everyone.id) {
           await interaction.reply({content: '🚫 you cannot use the everyone role', ephemeral: true});
+          return;
+        }
+
+        if (me.roles.highest.position <= role.position) {
+          await interaction.reply({content: '🚫 my highest role must be above the auto role — move my role higher in Server Settings', ephemeral: true});
           return;
         }
 

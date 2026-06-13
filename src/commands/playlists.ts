@@ -6,7 +6,7 @@ import Command from './index.js';
 import PlayerManager from '../managers/player.js';
 import {getMemberVoiceChannel, getMostPopularVoiceChannel} from '../utils/channels.js';
 import {getGuildSettings} from '../utils/get-guild-settings.js';
-import {buildPlayingMessageEmbed, buildPlayerButtons} from '../utils/build-embed.js';
+import {buildPlayingMessageEmbed} from '../utils/build-embed.js';
 import {prettyTime} from '../utils/time.js';
 
 const PLAYLIST_API = process.env.PLAYLIST_API_URL ?? 'https://playlist.droidlab.org';
@@ -171,10 +171,9 @@ export default class implements Command {
       const guildId = interaction.guild!.id;
       const {playlistLimit} = await getGuildSettings(guildId);
       const tracksToQueue = tracks.slice(0, playlistLimit);
+      const wasTruncated = tracks.length > tracksToQueue.length;
 
       const player = this.playerManager.get(guildId);
-      const [targetVoiceChannel] = getMemberVoiceChannel(interaction.member as GuildMember) ?? getMostPopularVoiceChannel(interaction.guild!);
-      const wasPlaying = player.getCurrent() !== null;
 
       for (const track of tracksToQueue) {
         player.add({
@@ -192,8 +191,18 @@ export default class implements Command {
         }, {immediate: false});
       }
 
+      const wasPlaying = player.getCurrent() !== null;
+
       if (!wasPlaying) {
-        await player.connect(targetVoiceChannel);
+        const [voiceChannel] = getMemberVoiceChannel(interaction.member as GuildMember)
+          ?? getMostPopularVoiceChannel(interaction.guild!);
+
+        if (!voiceChannel) {
+          await i.followUp({content: 'join a voice channel first', ephemeral: true});
+          return;
+        }
+
+        await player.connect(voiceChannel);
         await player.play();
       }
 
@@ -201,13 +210,11 @@ export default class implements Command {
         setTimeout(resolve, 1500);
       });
 
-      // Send now playing embed to the text channel
+      // Send now playing embed to the text channel (no buttons — they need a collector to work)
       const nowPlayingChannel = interaction.channel;
       if (nowPlayingChannel?.isTextBased()) {
         player.nowPlayingMessage = await nowPlayingChannel.send({
           embeds: [buildPlayingMessageEmbed(player)],
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          components: [buildPlayerButtons(player)] as any,
         });
       }
 
@@ -231,10 +238,16 @@ export default class implements Command {
       }
 
       const pageSize = 10;
-      const maxPage = Math.ceil(tracks.length / pageSize);
+      const maxPage = Math.ceil(tracksToQueue.length / pageSize);
       let currentPage = 1;
 
-      const doneEmbed = this.buildTrackEmbed(tracks, playlistName, currentPage, pageSize);
+      const doneEmbed = this.buildTrackEmbed({
+        tracks: tracksToQueue,
+        playlistName,
+        page: currentPage,
+        pageSize,
+        totalInPlaylist: wasTruncated ? tracks.length : undefined,
+      });
       const pageButtons: any[] = maxPage > 1 ? [this.buildPageButtons(currentPage, maxPage)] : [];
 
       await interaction.editReply({embeds: [doneEmbed], components: pageButtons});
@@ -265,7 +278,13 @@ export default class implements Command {
           currentPage = maxPage;
         }
 
-        const newEmbed = this.buildTrackEmbed(tracks, playlistName, currentPage, pageSize);
+        const newEmbed = this.buildTrackEmbed({
+          tracks: tracksToQueue,
+          playlistName,
+          page: currentPage,
+          pageSize,
+          totalInPlaylist: wasTruncated ? tracks.length : undefined,
+        });
         const newButtons: any[] = [this.buildPageButtons(currentPage, maxPage)];
         await btn.update({embeds: [newEmbed], components: newButtons});
       });
@@ -309,16 +328,26 @@ export default class implements Command {
     );
   }
 
-  private buildTrackEmbed(
-    tracks: Array<{title: string; artist: string; url: string; duration: number}>,
-    playlistName: string,
-    page: number,
-    pageSize: number,
-  ): EmbedBuilder {
+  private buildTrackEmbed({
+    tracks,
+    playlistName,
+    page,
+    pageSize,
+    totalInPlaylist,
+  }: {
+    tracks: Array<{title: string; artist: string; url: string; duration: number}>;
+    playlistName: string;
+    page: number;
+    pageSize: number;
+    totalInPlaylist?: number;
+  }): EmbedBuilder {
     const maxPage = Math.ceil(tracks.length / pageSize);
     const start = (page - 1) * pageSize;
     const slice = tracks.slice(start, start + pageSize);
     const totalDuration = tracks.reduce((acc, t) => acc + (t.duration ?? 0), 0);
+    const queuedLabel = totalInPlaylist && totalInPlaylist > tracks.length
+      ? `${tracks.length} of ${totalInPlaylist} queued`
+      : `${tracks.length} song${tracks.length === 1 ? '' : 's'}`;
 
     const preview = slice.map((t, idx) => {
       const num = start + idx + 1;
@@ -333,7 +362,7 @@ export default class implements Command {
 
     return new EmbedBuilder()
       .setColor(0x00d4ff)
-      .setTitle(`Playlist "${playlistName}" — ${tracks.length} song${tracks.length === 1 ? '' : 's'} — ${durationStr}`)
+      .setTitle(`Playlist "${playlistName}" — ${queuedLabel} — ${durationStr}`)
       .setDescription(`${preview}${extra}`)
       .setFooter({text: `droidlab · page ${page} of ${maxPage}`});
   }

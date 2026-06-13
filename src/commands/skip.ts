@@ -75,6 +75,10 @@ export default class implements Command {
         } else if (i.customId === 'player_stop') {
           p.stop();
         } else if (i.customId === 'player_loop') {
+          if (p.loopCurrentQueue) {
+            p.loopCurrentQueue = false;
+          }
+
           p.loopCurrentSong = !p.loopCurrentSong;
         }
 

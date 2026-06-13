@@ -91,7 +91,7 @@ export default class AddQueryToQueue {
 
     const firstSong = newSongs[0];
     const queueSize = player.queueSize();
-    const position = addToFrontOfQueue ? 1 : queueSize;
+    const position = addToFrontOfQueue ? 1 : queueSize - newSongs.length + 1;
     const duration = firstSong.isLive ? 'live' : prettyTime(firstSong.length);
 
     if (!wasPlayingSong) {
@@ -126,6 +126,10 @@ export default class AddQueryToQueue {
         } else if (i.customId === 'player_stop') {
           p.stop();
         } else if (i.customId === 'player_loop') {
+          if (p.loopCurrentQueue) {
+            p.loopCurrentQueue = false;
+          }
+
           p.loopCurrentSong = !p.loopCurrentSong;
         }
 

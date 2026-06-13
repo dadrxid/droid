@@ -88,10 +88,16 @@ export default class {
 
   private readonly channelToSpeakingUsers: Map<string, Set<string>> = new Map();
   private hasRegisteredVoiceActivityListener = false;
+  private isHandlingDisconnect = false;
+  private cachedPlaybackHash: string | null = null;
+  private readonly onVoiceConnectionDisconnectHandler: () => void;
 
   constructor(fileCache: FileCacheProvider, guildId: string) {
     this.fileCache = fileCache;
     this.guildId = guildId;
+    this.onVoiceConnectionDisconnectHandler = () => {
+      void this.onVoiceConnectionDisconnect();
+    };
   }
 
   async connect(channel: VoiceChannel): Promise<void> {
@@ -131,7 +137,7 @@ export default class {
       }
     });
 
-    voiceConnection.on(VoiceConnectionStatus.Disconnected, this.onVoiceConnectionDisconnect.bind(this));
+    voiceConnection.on(VoiceConnectionStatus.Disconnected, this.onVoiceConnectionDisconnectHandler);
 
     try {
       await this.waitForVoiceConnectionReady(voiceConnection);
@@ -145,6 +151,7 @@ export default class {
 
   disconnect(): void {
     this.clearDisconnectTimer();
+    this.releaseCachedPlaybackHash();
 
     if (this.voiceConnection) {
       if (this.status === STATUS.PLAYING) {
@@ -277,16 +284,9 @@ export default class {
     } catch (error: unknown) {
       await this.forward(1);
 
-      if ((error as {statusCode: number}).statusCode === 410 && currentSong) {
-        const channelId = currentSong.addedInChannelId;
-
-        if (channelId) {
-          debug(`${currentSong.title} is unavailable`);
-          return;
-        }
+      if ((error as {statusCode: number}).statusCode === 410 && currentSong?.addedInChannelId) {
+        debug(`${currentSong.title} is unavailable`);
       }
-
-      throw error;
     }
   }
 
@@ -500,7 +500,9 @@ export default class {
   }
 
   move(from: number, to: number): QueuedSong {
-    if (from > this.queueSize() || to > this.queueSize()) {
+    const queueSize = this.queueSize();
+
+    if (from < 1 || to < 1 || from > queueSize || to > queueSize) {
       throw new Error('Move index is outside the range of the queue.');
     }
 
@@ -531,7 +533,16 @@ export default class {
     }
   }
 
+  private releaseCachedPlaybackHash(): void {
+    if (this.cachedPlaybackHash) {
+      this.fileCache.releaseInUse(this.cachedPlaybackHash);
+      this.cachedPlaybackHash = null;
+    }
+  }
+
   private async getStream(song: QueuedSong, options: {seek?: number; to?: number} = {}): Promise<Readable> {
+    this.releaseCachedPlaybackHash();
+
     if (this.audioPlayer) {
       this.audioPlayer.removeAllListeners();
       this.audioPlayer.stop(true);
@@ -546,6 +557,11 @@ export default class {
     let shouldCacheVideo = false;
 
     ffmpegInput = await this.fileCache.getPathFor(this.getHashForCache(song.url));
+
+    if (ffmpegInput) {
+      this.cachedPlaybackHash = this.getHashForCache(song.url);
+      this.fileCache.markInUse(this.cachedPlaybackHash);
+    }
 
     if (!ffmpegInput) {
       const mediaSource = await getYouTubeMediaSource(song.url);
@@ -582,7 +598,7 @@ export default class {
       url: ffmpegInput,
       cacheKey: song.url,
       ffmpegInputOptions,
-      cache: shouldCacheVideo,
+      cache: shouldCacheVideo && !this.fileCache.isWriteInProgress(this.getHashForCache(song.url)),
     });
   }
 
@@ -621,35 +637,45 @@ export default class {
   }
 
   private async onVoiceConnectionDisconnect(): Promise<void> {
-    if (!this.voiceConnection || this.voiceConnection.state.status !== VoiceConnectionStatus.Disconnected) {
+    if (this.isHandlingDisconnect) {
       return;
     }
 
-    const disconnectedState = this.voiceConnection.state;
-    if (disconnectedState.reason === VoiceConnectionDisconnectReason.WebSocketClose && disconnectedState.closeCode === 4014) {
-      try {
-        await Promise.race([
-          entersState(this.voiceConnection, VoiceConnectionStatus.Connecting, 5_000),
-          entersState(this.voiceConnection, VoiceConnectionStatus.Signalling, 5_000),
-        ]);
-        return;
-      } catch {
-        this.disconnect();
+    this.isHandlingDisconnect = true;
+
+    try {
+      if (!this.voiceConnection || this.voiceConnection.state.status !== VoiceConnectionStatus.Disconnected) {
         return;
       }
-    }
 
-    if (this.voiceConnection.rejoinAttempts < 5) {
-      await sleep((this.voiceConnection.rejoinAttempts + 1) * 5_000);
-
-      if (this.voiceConnection && this.voiceConnection.state.status === VoiceConnectionStatus.Disconnected) {
-        if (this.voiceConnection.rejoin()) {
+      const disconnectedState = this.voiceConnection.state;
+      if (disconnectedState.reason === VoiceConnectionDisconnectReason.WebSocketClose && disconnectedState.closeCode === 4014) {
+        try {
+          await Promise.race([
+            entersState(this.voiceConnection, VoiceConnectionStatus.Connecting, 5_000),
+            entersState(this.voiceConnection, VoiceConnectionStatus.Signalling, 5_000),
+          ]);
+          return;
+        } catch {
+          this.disconnect();
           return;
         }
       }
-    }
 
-    this.disconnect();
+      if (this.voiceConnection.rejoinAttempts < 5) {
+        await sleep((this.voiceConnection.rejoinAttempts + 1) * 5_000);
+
+        if (this.voiceConnection && this.voiceConnection.state.status === VoiceConnectionStatus.Disconnected) {
+          if (this.voiceConnection.rejoin()) {
+            return;
+          }
+        }
+      }
+
+      this.disconnect();
+    } finally {
+      this.isHandlingDisconnect = false;
+    }
   }
 
   private async ensureVoiceConnectionReady(): Promise<VoiceConnection> {
@@ -779,10 +805,7 @@ export default class {
       stream.pipe(capacitor);
 
       returnedStream.on('close', () => {
-        if (!options.cache) {
-          stream.kill('SIGKILL');
-        }
-
+        stream.kill('SIGKILL');
         hasReturnedStreamClosed = true;
       });
 

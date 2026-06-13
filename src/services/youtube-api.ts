@@ -89,13 +89,15 @@ export default class {
       },
     };
 
-    const {items} = await this.cache.wrap(
+    const response = await this.cache.wrap(
       async () => this.got('search', params).json() as Promise<SearchResponse>,
       params,
       {
         expiresIn: ONE_HOUR_IN_SECONDS,
       },
     );
+
+    const items = response.items ?? [];
 
     const ids = items
       .map(item => item.id.videoId)
@@ -321,6 +323,6 @@ export default class {
         expiresIn: ONE_HOUR_IN_SECONDS,
       },
     );
-    return videos;
+    return videos ?? [];
   }
 }
