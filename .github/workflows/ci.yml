@@ -22,14 +22,13 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
-          cache: 'yarn'
-          cache-dependency-path: yarn.lock
 
       - name: Install dependencies
         env:
           HUSKY: '0'
         run: |
-          corepack enable
+          npm install -g yarn@1.22.22
+          yarn --version
           yarn install --frozen-lockfile
 
       - run: yarn prisma generate

@@ -1,7 +1,9 @@
 name: Build and Push Docker Image
 
-# Replaced by ci.yml — kept for manual runs only
+# Fallback publish path if CI yarn install fails on the runner
 on:
+  push:
+    branches: [master]
   workflow_dispatch:
 
 jobs:
