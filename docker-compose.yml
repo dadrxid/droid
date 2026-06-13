@@ -4,7 +4,7 @@ services:
     image: ghcr.io/dadrxid/droid:latest
     build: .
     container_name: droid
-    restart: unless-stopped
+    restart: on-failure:5
     volumes:
       - /DATA/AppData/muse:/data
     env_file:

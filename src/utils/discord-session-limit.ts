@@ -30,7 +30,7 @@ export async function waitForDiscordSessionLimitReset(resetAt: Date): Promise<vo
     'Discord session start limit reached (usually from crash-loop restarts). '
     + `Waiting ~${waitMinutes} minute(s) until ${resetAt.toISOString()} before reconnecting...`,
   );
-  console.warn('Stop duplicate bot containers in Portainer while waiting.');
+  console.warn('If using Portainer, set restart policy to "on failure" (not "unless stopped") to avoid Discord session limits.');
 
   await sleep(waitMs);
 }

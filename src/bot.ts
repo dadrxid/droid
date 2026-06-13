@@ -15,7 +15,7 @@ import {generateDependencyReport} from '@discordjs/voice';
 import {REST} from '@discordjs/rest';
 import {Routes} from 'discord-api-types/v10';
 import registerCommandsOnGuild from './utils/register-commands-on-guild.js';
-import {getDiscordSessionLimitResetAt, waitForDiscordSessionLimitReset} from './utils/discord-session-limit.js';
+import {isInvalidDiscordTokenError, waitBeforeDiscordLoginRetry} from './utils/discord-login-retry.js';
 
 @injectable()
 export default class {
@@ -158,7 +158,13 @@ export default class {
     this.client.on('error', console.error);
     this.client.on('debug', debug);
     this.client.on('shardDisconnect', (event, shardId) => {
-      console.warn(`Discord shard ${shardId} disconnected (${event.code}): ${event.reason || 'no reason'}`);
+      console.warn(`Discord shard ${String(shardId)} disconnected (${event.code}): ${event.reason || 'no reason'} — discord.js will try to reconnect`);
+    });
+    this.client.on('shardReconnect', shardId => {
+      console.warn(`Discord shard ${String(shardId)} reconnecting...`);
+    });
+    this.client.on('shardResume', (shardId, replayedEvents) => {
+      console.warn(`Discord shard ${String(shardId)} resumed (${String(replayedEvents)} events replayed)`);
     });
     this.client.on('shardError', (error, shardId) => {
       console.error(`Discord shard ${shardId} error:`, error);
@@ -168,26 +174,33 @@ export default class {
     this.client.on('voiceStateUpdate', handleVoiceStateUpdate);
     this.client.on('guildMemberAdd', handleGuildMemberAdd);
 
+    let loginAttempt = 0;
+
     for (;;) {
+      loginAttempt += 1;
+
       try {
         // eslint-disable-next-line no-await-in-loop -- intentional backoff when Discord rate-limits session starts
         await this.client.login(this.config.DISCORD_TOKEN);
         break;
       } catch (error: unknown) {
-        const resetAt = getDiscordSessionLimitResetAt(error);
-
-        if (resetAt) {
-          spinner.stop();
-          // eslint-disable-next-line no-await-in-loop -- must wait for Discord's reset window
-          await waitForDiscordSessionLimitReset(resetAt);
-          spinner.start('📡 connecting to Discord...');
-          continue;
+        if (isInvalidDiscordTokenError(error)) {
+          spinner.fail('Invalid DISCORD_TOKEN — fix it in Portainer and redeploy');
+          console.error(error);
+          process.exit(1);
         }
 
-        spinner.fail('Failed to log in to Discord');
-        console.error(error);
-        console.error('Check DISCORD_TOKEN is valid and was not reset in the Discord Developer Portal.');
-        process.exit(1);
+        spinner.stop();
+
+        try {
+          this.client.destroy();
+        } catch {
+          // ignore cleanup errors before retry
+        }
+
+        // eslint-disable-next-line no-await-in-loop -- must wait between login attempts
+        await waitBeforeDiscordLoginRetry(error, loginAttempt);
+        spinner.start('📡 connecting to Discord...');
       }
     }
   }

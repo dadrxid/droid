@@ -88,8 +88,7 @@ const hasDatabaseBeenMigratedToPrisma = async () => {
   try {
     await startBot();
   } catch (error: unknown) {
-    console.error('Bot failed to start:');
+    console.error('Bot failed to start (will not exit — fix the error and restart manually if needed):');
     console.error(error);
-    process.exit(1);
   }
 })();
