@@ -1,5 +1,6 @@
 // This script applies Prisma migrations
 // and then starts Muse.
+import {setTimeout as sleep} from 'timers/promises';
 import {execa, ExecaError} from 'execa';
 import {promises as fs} from 'fs';
 import Prisma from '@prisma/client';
@@ -85,10 +86,21 @@ const hasDatabaseBeenMigratedToPrisma = async () => {
 
   spinner.succeed('Database migrations applied.');
 
-  try {
-    await startBot();
-  } catch (error: unknown) {
-    console.error('Bot failed to start (will not exit — fix the error and restart manually if needed):');
-    console.error(error);
+  let startAttempt = 0;
+
+  for (;;) {
+    startAttempt += 1;
+
+    try {
+      // eslint-disable-next-line no-await-in-loop -- retry until Discord login succeeds
+      await startBot();
+      break;
+    } catch (error: unknown) {
+      const delayMs = Math.min(120_000, 15_000 * Math.min(startAttempt, 5));
+      console.error(`Bot failed to start (attempt ${startAttempt}). Retrying in ${Math.ceil(delayMs / 1000)}s instead of exiting:`);
+      console.error(error);
+      // eslint-disable-next-line no-await-in-loop -- backoff between startup retries
+      await sleep(delayMs);
+    }
   }
 })();
