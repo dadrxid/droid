@@ -1,9 +1,7 @@
 name: Build and Push Docker Image
 
-# Fallback publish path if CI yarn install fails on the runner
+# Manual fallback — CI publishes on every master push
 on:
-  push:
-    branches: [master]
   workflow_dispatch:
 
 jobs:
