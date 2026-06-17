@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BO7 Cherry Fizz — Zombies Checklist</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1117;
+      --card: #1a1d27;
+      --border: #2d3344;
+      --text: #e8eaef;
+      --muted: #9aa3b5;
+      --accent: #ff4d6d;
+      --accent-soft: rgba(255, 77, 109, 0.15);
+      --done: #3ddc84;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Segoe UI, system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .wrap {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 24px 16px 48px;
+    }
+
+    header {
+      margin-bottom: 24px;
+      padding: 20px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--card), #141824);
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.5rem;
+    }
+
+    .sub {
+      color: var(--muted);
+      font-size: 0.95rem;
+      margin: 0;
+    }
+
+    .progress-bar {
+      margin-top: 16px;
+      height: 10px;
+      background: #11141c;
+      border-radius: 999px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent), #ff8fab);
+      transition: width 0.2s ease;
+    }
+
+    .progress-label {
+      margin-top: 8px;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .item {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 12px;
+      align-items: start;
+      padding: 16px;
+      margin-bottom: 12px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+
+    .item.done {
+      border-color: rgba(61, 220, 132, 0.35);
+      background: rgba(61, 220, 132, 0.05);
+    }
+
+    .item input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      margin-top: 2px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    .tag {
+      display: inline-block;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+
+    .title {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .desc {
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .counter {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 110px;
+      justify-self: end;
+    }
+
+    .counter input {
+      width: 64px;
+      padding: 6px 8px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #11141c;
+      color: var(--text);
+      text-align: right;
+    }
+
+    .counter span {
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 20px;
+    }
+
+    button {
+      border: 1px solid var(--border);
+      background: #11141c;
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font: inherit;
+    }
+
+    button:hover { border-color: var(--accent); }
+
+    .note {
+      margin-top: 24px;
+      padding: 14px 16px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #11141c;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    @media (max-width: 560px) {
+      .item { grid-template-columns: auto 1fr; }
+      .counter { grid-column: 2; justify-self: start; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>BO7 Cherry Fizz — Zombies Checklist</h1>
+      <p class="sub">Illicit Cargo event · Weapon class challenges · Progress saves in this browser</p>
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="progress-label" id="progressLabel">0 / 9 complete</div>
+    </header>
+
+    <div id="list"></div>
+
+    <div class="actions">
+      <button type="button" id="resetBtn">Reset all progress</button>
+    </div>
+
+    <p class="note">
+      GitHub markdown files cannot tick checkboxes in the file viewer. Use this page instead.
+      Open it locally or enable GitHub Pages on this repo (Settings → Pages → deploy from <code>/docs</code>).
+    </p>
+  </div>
+
+  <script>
+    const STORAGE_KEY = "bo7-cherry-fizz-zombies-v1";
+
+    const challenges = [
+      { id: "ar", tag: "AR", title: "Assault Rifle", desc: "750 eliminations with Pack-a-Punch Level III", max: 750 },
+      { id: "mr", tag: "MR", title: "Marksman Rifle", desc: "Get 5 Rapid Kills — 25 times", max: 25 },
+      { id: "smg", tag: "SMG", title: "SMG", desc: "1,000 eliminations with SMGs from the Mystery Box", max: 1000 },
+      { id: "sniper", tag: "SNIPER", title: "Sniper", desc: "300 eliminations with Cryo Freeze or Napalm Burst ammo mod", max: 300 },
+      { id: "shotgun", tag: "SHOTGUN", title: "Shotgun", desc: "Kill 5 Elites", max: 5 },
+      { id: "pistol", tag: "PISTOL", title: "Pistol", desc: "300 Critical Kills", max: 300 },
+      { id: "lmg", tag: "LMG", title: "LMG", desc: "Earn 10 Carnage Medals", max: 10 },
+      { id: "rpg", tag: "RPG", title: "Launcher / Special", desc: "Kill 10 enemies in 5 seconds — 10 times", max: 10 },
+      { id: "melee", tag: "MELEE", title: "Melee", desc: "50 consecutive kills without taking damage", max: null }
+    ];
+
+    function loadState() {
+      try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+      } catch {
+        return {};
+      }
+    }
+
+    function saveState(state) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    function render() {
+      const state = loadState();
+      const list = document.getElementById("list");
+      list.innerHTML = "";
+
+      let doneCount = 0;
+
+      challenges.forEach((item) => {
+        const entry = state[item.id] || { checked: false, progress: 0 };
+        if (entry.checked) doneCount += 1;
+
+        const row = document.createElement("div");
+        row.className = "item" + (entry.checked ? " done" : "");
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = !!entry.checked;
+        checkbox.addEventListener("change", () => {
+          const current = loadState();
+          current[item.id] = { ...(current[item.id] || {}), checked: checkbox.checked };
+          saveState(current);
+          render();
+        });
+
+        const body = document.createElement("div");
+        body.innerHTML =
+          `<span class="tag">${item.tag}</span>` +
+          `<div class="title">${item.title}</div>` +
+          `<div class="desc">${item.desc}</div>`;
+
+        row.appendChild(checkbox);
+        row.appendChild(body);
+
+        if (item.max !== null) {
+          const counter = document.createElement("div");
+          counter.className = "counter";
+
+          const input = document.createElement("input");
+          input.type = "number";
+          input.min = "0";
+          input.max = String(item.max);
+          input.value = String(entry.progress || 0);
+          input.addEventListener("change", () => {
+            const value = Math.max(0, Math.min(item.max, Number(input.value) || 0));
+            input.value = String(value);
+            const current = loadState();
+            current[item.id] = {
+              checked: value >= item.max ? true : !!(current[item.id] && current[item.id].checked),
+              progress: value
+            };
+            saveState(current);
+            render();
+          });
+
+          const label = document.createElement("span");
+          label.textContent = `/ ${item.max}`;
+
+          counter.appendChild(input);
+          counter.appendChild(label);
+          row.appendChild(counter);
+        }
+
+        list.appendChild(row);
+      });
+
+      const pct = Math.round((doneCount / challenges.length) * 100);
+      document.getElementById("progressFill").style.width = pct + "%";
+      document.getElementById("progressLabel").textContent = `${doneCount} / ${challenges.length} complete`;
+    }
+
+    document.getElementById("resetBtn").addEventListener("click", () => {
+      if (confirm("Reset all checklist progress on this device?")) {
+        localStorage.removeItem(STORAGE_KEY);
+        render();
+      }
+    });
+
+    render();
+  </script>
+</body>
+</html>

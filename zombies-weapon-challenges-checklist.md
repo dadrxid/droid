@@ -1,6 +1,12 @@
 # Zombies — Weapon Challenges Checklist
 
-Track progress for each weapon category challenge.
+> **GitHub cannot tick markdown checkboxes in the file viewer** — they are read-only here.
+>
+> **Use the interactive checklist instead:**
+> - [Open interactive HTML checklist](docs/bo7-cherry-fizz-zombies-checklist.html) (click checkboxes + save progress in your browser)
+> - Or create a **GitHub Issue** in this repo and paste this list — Issue checkboxes *do* work when clicked
+
+Track progress for each weapon category challenge (BO7 Illicit Cargo / Cherry Fizz — Zombies mode).
 
 ---
 
