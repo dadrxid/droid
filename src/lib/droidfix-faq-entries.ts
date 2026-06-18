@@ -22,6 +22,8 @@ function mailIn(ctx: DroidfixFaqContext): string {
   return mentionChannel(ctx.links.mailInChannelId, '#mail-in');
 }
 
+const EDGE_NOT_YET_LINE = 'DualSense Edge is **not accepted yet** (Edge module support is planned).';
+
 /** Most specific entries first. Highest match score wins. */
 export const DROIDFIX_FAQ_ENTRIES: DroidfixFaqEntry[] = [
   {
@@ -66,11 +68,15 @@ We repair Xbox Wireless Controller **Model 1914** (Series X|S) only.`,
       'dual sense edge',
       'ds edge',
       'edge dualsense',
+      'edge modules',
+      'dualsense edge modules',
+      'edge module',
     ],
-    patterns: [/\bdual\s*sense\s*edge\b/i, /\bps5\s*edge\b/i],
-    buildReply: () => `**No.** We do not accept DualSense Edge controllers.
+    patterns: [/\bdual\s*sense\s*edge\b/i, /\bps5\s*edge\b/i, /\bedge\s*modules?\b/i],
+    buildReply: ctx => `${EDGE_NOT_YET_LINE}
 
-Standard PS5 DualSense only.`,
+Standard PS5 DualSense only for now. We will announce in Discord and on the shop when Edge modules go live.
+Questions? ${ask(ctx)} or ${ticket(ctx)}.`,
   },
   {
     id: 'ps4-v1',
@@ -161,7 +167,7 @@ Unsure? Open ${ticket(ctx)} with label + front photos before you post.`,
       /what ps5 model/i,
     ],
     requireAny: ['ps5', 'bdm', 'dualsense'],
-    buildReply: () => `PS5 **Sony DualSense** only (not DualSense Edge).
+    buildReply: () => `PS5 **Sony DualSense** only for now. ${EDGE_NOT_YET_LINE}
 
 For shell swaps and some parts, **BDM model matters**. Check yours before ordering parts:
 https://www.extremerate.com/blogs/replacement-guides/how-to-check-your-ps5-controller-bdm-model
@@ -189,7 +195,7 @@ Ask in ${ask(ctx)} or open ${ticket(ctx)} with a label photo if you are unsure.`
       /^ps5\s*\?*$/i,
       /^do you (?:take|fix|repair|accept) (?:my )?ps5\b/i,
     ],
-    buildReply: () => `Yes, standard **PS5 DualSense** (not DualSense Edge).
+    buildReply: () => `Yes, standard **PS5 DualSense**. ${EDGE_NOT_YET_LINE}
 
 Hall effect stick drift fixes, charging ports, shell swaps and more: https://droidfix.uk/services/ps5`,
   },
@@ -464,11 +470,11 @@ Typical turnaround once we receive your pad: **3 to 7 working days**.`,
     ],
     requireAny: ['controller', 'pad', 'dualsense', 'dualshock', 'xbox', 'ps4', 'ps5', 'fix', 'repair', 'take', 'accept'],
     buildReply: ctx => `We repair:
-· PS5 DualSense (not Edge)
+· PS5 DualSense (Edge not yet · modules planned)
 · PS4 DualShock 4 **JDM-040/050/055** (V2 only)
 · Xbox Wireless Controller **Model 1914** (Series X|S)
 
-We do **not** accept Xbox One, Elite Series 2, DualSense Edge, third-party pads, or PS4 V1.
+We do **not** accept Xbox One, Elite Series 2, third-party pads, or PS4 V1. ${EDGE_NOT_YET_LINE}
 
 Not sure? Ask in ${ask(ctx)} or open ${ticket(ctx)} with a photo of the label before you order.
 Shop: https://droidfix.uk`,
