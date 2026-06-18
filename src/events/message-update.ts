@@ -10,7 +10,7 @@ async function resolveMessage(message: Message | PartialMessage): Promise<Messag
     }
   }
 
-  return message as Message;
+  return message;
 }
 
 export default async (oldMessage: Message | PartialMessage, newMessage: Message | PartialMessage): Promise<void> => {
