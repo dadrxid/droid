@@ -20,7 +20,8 @@ export default class implements Command {
         `**Droid bot** v${pkg.version}`,
         `commit: \`${commit.slice(0, 12)}\``,
         `built: ${buildDate}`,
-        'If commit starts with `e117a89` or newer, welcome-droidfix and faq-droidfix are included.',
+        'Welcome redesign needs commit **fd8c7d0** or newer (card says "Glad you made it.", no URL in text).',
+        'FAQ smart matching needs **0ce2c36** or newer.',
       ].join('\n'),
       ephemeral: true,
     });
