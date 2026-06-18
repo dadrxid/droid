@@ -4,14 +4,13 @@ import {injectable} from 'inversify';
 import {prisma} from '../utils/db.js';
 import Command from './index.js';
 import {getGuildSettings} from '../utils/get-guild-settings.js';
-import {GUILD_ADMIN_COMMAND_PERMISSIONS, requireGuildAdministrator} from '../utils/require-guild-admin.js';
+import {requireGuildAdministrator} from '../utils/require-guild-admin.js';
 
 @injectable()
 export default class implements Command {
   public readonly slashCommand = new SlashCommandBuilder()
     .setName('config')
     .setDescription('configure music bot settings (Administrator only)')
-    .setDefaultMemberPermissions(GUILD_ADMIN_COMMAND_PERMISSIONS)
     .addSubcommand(subcommand => subcommand
       .setName('set-playlist-limit')
       .setDescription('set the maximum number of tracks that can be added from a playlist')

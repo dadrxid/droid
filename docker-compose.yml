@@ -3,6 +3,8 @@ services:
   droid:
     # NEVER use :latest in production — it auto-updates when CI/deploy runs.
     # Update only after manually running "Deploy Stable" in GitHub Actions, then pull this tag.
+    # After Deploy Stable on GitHub, pull this tag in Portainer (Recreate with pull).
+    # To verify deploy: run /version in Discord — commit should match the latest GitHub SHA.
     image: ghcr.io/dadrxid/droid:stable
     container_name: droid
     restart: on-failure:5

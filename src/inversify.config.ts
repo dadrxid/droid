@@ -42,6 +42,7 @@ import Skip from './commands/skip.js';
 import Stop from './commands/stop.js';
 import Unskip from './commands/unskip.js';
 import Volume from './commands/volume.js';
+import Version from './commands/version.js';
 import FaqDroidfix from './commands/faq-droidfix.js';
 import WelcomeDroidfix from './commands/welcome-droidfix.js';
 import WelcomeDroidlab from './commands/welcome-droidlab.js';
@@ -96,6 +97,7 @@ container.bind<YoutubeAPI>(TYPES.Services.YoutubeAPI).to(YoutubeAPI).inSingleton
   Stop,
   Unskip,
   Volume,
+  Version,
   FaqDroidfix,
   WelcomeDroidfix,
   WelcomeDroidlab,

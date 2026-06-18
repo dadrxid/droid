@@ -14,8 +14,7 @@ import {isUserInVoice} from './utils/channels.js';
 import Config from './services/config.js';
 import {generateDependencyReport} from '@discordjs/voice';
 import {REST} from '@discordjs/rest';
-import {Routes} from 'discord-api-types/v10';
-import registerCommandsOnGuild from './utils/register-commands-on-guild.js';
+import {syncSlashCommands} from './utils/sync-slash-commands.js';
 import {isInvalidDiscordTokenError, waitBeforeDiscordLoginRetry} from './utils/discord-login-retry.js';
 import createDiscordClient from './utils/create-discord-client.js';
 import {setActiveDiscordClient} from './utils/discord-client-holder.js';
@@ -224,30 +223,19 @@ export default class {
       const commandNames = [...this.commandsByName.keys()].sort();
       console.log(`Slash commands (${commandNames.length}) commit=${process.env.COMMIT_HASH ?? 'unknown'}: ${commandNames.join(', ')}`);
 
-      if (this.shouldRegisterCommandsOnBot) {
-        spinner.text = '📡 updating commands on bot...';
-        await rest.put(
-          Routes.applicationCommands(client.user!.id),
-          {body: this.commandsByName.map(command => command.slashCommand.toJSON())},
-        );
-      } else {
-        spinner.text = '📡 updating commands in all guilds...';
-
-        await Promise.all([
-          ...client.guilds.cache.map(async guild => {
-            await registerCommandsOnGuild({
-              rest,
-              guildId: guild.id,
-              applicationId: client.user!.id,
-              commands: this.commandsByName.map(c => c.slashCommand),
-            });
-          }),
-          rest.put(Routes.applicationCommands(client.user!.id), {body: []}),
-        ],
-        );
+      try {
+        await syncSlashCommands({
+          rest,
+          client,
+          commands: [...this.commandsByName.values()],
+          registerGlobally: this.shouldRegisterCommandsOnBot,
+        });
+        console.log(`Slash commands synced to Discord (global=${String(this.shouldRegisterCommandsOnBot)}, guilds=${client.guilds.cache.size})`);
+      } catch (error: unknown) {
+        spinner.fail('Failed to sync slash commands to Discord');
+        console.error(error);
+        process.exit(1);
       }
-
-      console.log(`Slash commands synced to Discord (global=${String(this.shouldRegisterCommandsOnBot)}, guilds=${client.guilds.cache.size})`);
 
       client.user!.setPresence({
         activities: [

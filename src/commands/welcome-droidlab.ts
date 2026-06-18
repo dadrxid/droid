@@ -4,14 +4,13 @@ import {injectable} from 'inversify';
 import Command from './index.js';
 import {prisma} from '../utils/db.js';
 import {getGuildSettings} from '../utils/get-guild-settings.js';
-import {GUILD_ADMIN_COMMAND_PERMISSIONS, requireGuildAdministrator} from '../utils/require-guild-admin.js';
+import {requireGuildAdministrator} from '../utils/require-guild-admin.js';
 
 @injectable()
 export default class implements Command {
   public readonly slashCommand = new SlashCommandBuilder()
     .setName('welcome-droidlab')
     .setDescription('configure the DroidLab welcome card channel (Administrator only)')
-    .setDefaultMemberPermissions(GUILD_ADMIN_COMMAND_PERMISSIONS)
     .addSubcommand(subcommand => subcommand
       .setName('set')
       .setDescription('set the channel for DroidLab welcome cards')

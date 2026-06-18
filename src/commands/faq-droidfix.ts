@@ -12,14 +12,13 @@ import {
 } from '../utils/droidfix-faq-context.js';
 import {previewDroidfixFaq} from '../utils/droidfix-faq-handler.js';
 import {DROIDFIX_FAQ_ENTRIES} from '../lib/droidfix-faq-entries.js';
-import {GUILD_ADMIN_COMMAND_PERMISSIONS, requireGuildAdministrator} from '../utils/require-guild-admin.js';
+import {requireGuildAdministrator} from '../utils/require-guild-admin.js';
 
 @injectable()
 export default class implements Command {
   public readonly slashCommand = new SlashCommandBuilder()
     .setName('faq-droidfix')
     .setDescription('configure DroidFix FAQ auto-replies for this server (Administrator only)')
-    .setDefaultMemberPermissions(GUILD_ADMIN_COMMAND_PERMISSIONS)
     .addSubcommand(subcommand => subcommand
       .setName('set')
       .setDescription('enable FAQ auto-replies in a channel (usually #ask)')

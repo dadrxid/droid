@@ -7,14 +7,13 @@ import {
   roleBelongsToGuild,
   setAutoRoleForGuild,
 } from '../utils/assign-auto-role.js';
-import {GUILD_ADMIN_COMMAND_PERMISSIONS, requireGuildAdministrator} from '../utils/require-guild-admin.js';
+import {requireGuildAdministrator} from '../utils/require-guild-admin.js';
 
 @injectable()
 export default class implements Command {
   public readonly slashCommand = new SlashCommandBuilder()
     .setName('autorole')
     .setDescription('configure the auto role for this server only (Administrator only)')
-    .setDefaultMemberPermissions(GUILD_ADMIN_COMMAND_PERMISSIONS)
     .addSubcommand(subcommand => subcommand
       .setName('set')
       .setDescription('set the role new members get on this server')
