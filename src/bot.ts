@@ -221,6 +221,9 @@ export default class {
       debug(generateDependencyReport());
 
       const rest = new REST({version: '10'}).setToken(this.config.DISCORD_TOKEN);
+      const commandNames = [...this.commandsByName.keys()].sort();
+      console.log(`Slash commands (${commandNames.length}) commit=${process.env.COMMIT_HASH ?? 'unknown'}: ${commandNames.join(', ')}`);
+
       if (this.shouldRegisterCommandsOnBot) {
         spinner.text = '📡 updating commands on bot...';
         await rest.put(
@@ -243,6 +246,8 @@ export default class {
         ],
         );
       }
+
+      console.log(`Slash commands synced to Discord (global=${String(this.shouldRegisterCommandsOnBot)}, guilds=${client.guilds.cache.size})`);
 
       client.user!.setPresence({
         activities: [
