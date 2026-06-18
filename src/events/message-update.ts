@@ -1,0 +1,39 @@
+import {Message, PartialMessage} from 'discord.js';
+import {hasFaqRepliedToMessage, tryReplyToDroidfixFaq} from '../utils/droidfix-faq-handler.js';
+
+async function resolveMessage(message: Message | PartialMessage): Promise<Message | null> {
+  if (message.partial) {
+    try {
+      return await message.fetch();
+    } catch {
+      return null;
+    }
+  }
+
+  return message as Message;
+}
+
+export default async (oldMessage: Message | PartialMessage, newMessage: Message | PartialMessage): Promise<void> => {
+  try {
+    const resolved = await resolveMessage(newMessage);
+
+    if (!resolved) {
+      return;
+    }
+
+    const oldContent = oldMessage.content ?? '';
+    const newContent = resolved.content ?? '';
+
+    if (!newContent || oldContent === newContent) {
+      return;
+    }
+
+    if (hasFaqRepliedToMessage(resolved.id)) {
+      return;
+    }
+
+    await tryReplyToDroidfixFaq(resolved, {isEdit: true});
+  } catch (error) {
+    console.error('DroidFix FAQ edit auto-reply failed:', error);
+  }
+};
