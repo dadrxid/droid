@@ -1,31 +1,36 @@
 import {SlashCommandBuilder} from '@discordjs/builders';
-import {ChannelType, ChatInputCommandInteraction, PermissionFlagsBits} from 'discord.js';
+import {ChannelType, ChatInputCommandInteraction} from 'discord.js';
 import {injectable} from 'inversify';
 import Command from './index.js';
 import {prisma} from '../utils/db.js';
 import {getGuildSettings} from '../utils/get-guild-settings.js';
+import {GUILD_ADMIN_COMMAND_PERMISSIONS, requireGuildAdministrator} from '../utils/require-guild-admin.js';
 
 @injectable()
 export default class implements Command {
   public readonly slashCommand = new SlashCommandBuilder()
-    .setName('welcome')
-    .setDescription('configure the welcome message channel')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild.toString())
+    .setName('welcome-droidlab')
+    .setDescription('configure the DroidLab welcome card channel (Administrator only)')
+    .setDefaultMemberPermissions(GUILD_ADMIN_COMMAND_PERMISSIONS)
     .addSubcommand(subcommand => subcommand
       .setName('set')
-      .setDescription('set the channel to send welcome messages to')
+      .setDescription('set the channel for DroidLab welcome cards')
       .addChannelOption(option => option
         .setName('channel')
-        .setDescription('the channel to send welcome messages to')
+        .setDescription('text channel for DroidLab welcomes')
         .setRequired(true)))
     .addSubcommand(subcommand => subcommand
       .setName('disable')
-      .setDescription('disable welcome messages'))
+      .setDescription('disable DroidLab welcome cards'))
     .addSubcommand(subcommand => subcommand
       .setName('status')
-      .setDescription('show the current welcome channel'));
+      .setDescription('show the current DroidLab welcome channel'));
 
   async execute(interaction: ChatInputCommandInteraction) {
+    if (!await requireGuildAdministrator(interaction)) {
+      return;
+    }
+
     const subcommand = interaction.options.getSubcommand();
     const guildId = interaction.guild!.id;
 
@@ -42,10 +47,13 @@ export default class implements Command {
 
         await prisma.setting.update({
           where: {guildId},
-          data: {welcomeChannelId: channel.id},
+          data: {droidlabWelcomeChannelId: channel.id},
         });
 
-        await interaction.reply({content: `✅ welcome messages will now be sent to <#${channel.id}>`, ephemeral: true});
+        await interaction.reply({
+          content: `✅ **DroidLab** welcome cards will post in <#${channel.id}>`,
+          ephemeral: true,
+        });
         break;
       }
 
@@ -54,22 +62,25 @@ export default class implements Command {
 
         await prisma.setting.update({
           where: {guildId},
-          data: {welcomeChannelId: null},
+          data: {droidlabWelcomeChannelId: null},
         });
 
-        await interaction.reply({content: '✅ welcome messages disabled', ephemeral: true});
+        await interaction.reply({content: '✅ **DroidLab** welcome cards disabled', ephemeral: true});
         break;
       }
 
       case 'status': {
         const setting = await prisma.setting.findUnique({where: {guildId}});
 
-        if (!setting?.welcomeChannelId) {
-          await interaction.reply({content: 'welcome messages are currently **disabled**', ephemeral: true});
+        if (!setting?.droidlabWelcomeChannelId) {
+          await interaction.reply({content: '**DroidLab** welcome cards are **disabled**', ephemeral: true});
           return;
         }
 
-        await interaction.reply({content: `welcome messages are being sent to <#${setting.welcomeChannelId}>`, ephemeral: true});
+        await interaction.reply({
+          content: `**DroidLab** welcome cards post in <#${setting.droidlabWelcomeChannelId}>`,
+          ephemeral: true,
+        });
         break;
       }
 

@@ -1,16 +1,17 @@
 import {SlashCommandBuilder} from '@discordjs/builders';
-import {ChatInputCommandInteraction, EmbedBuilder, PermissionFlagsBits} from 'discord.js';
+import {ChatInputCommandInteraction, EmbedBuilder} from 'discord.js';
 import {injectable} from 'inversify';
 import {prisma} from '../utils/db.js';
 import Command from './index.js';
 import {getGuildSettings} from '../utils/get-guild-settings.js';
+import {GUILD_ADMIN_COMMAND_PERMISSIONS, requireGuildAdministrator} from '../utils/require-guild-admin.js';
 
 @injectable()
 export default class implements Command {
   public readonly slashCommand = new SlashCommandBuilder()
     .setName('config')
-    .setDescription('configure bot settings')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild.toString())
+    .setDescription('configure music bot settings (Administrator only)')
+    .setDefaultMemberPermissions(GUILD_ADMIN_COMMAND_PERMISSIONS)
     .addSubcommand(subcommand => subcommand
       .setName('set-playlist-limit')
       .setDescription('set the maximum number of tracks that can be added from a playlist')
@@ -86,6 +87,10 @@ export default class implements Command {
       .setDescription('show all settings'));
 
   async execute(interaction: ChatInputCommandInteraction) {
+    if (!await requireGuildAdministrator(interaction)) {
+      return;
+    }
+
     // Ensure guild settings exist before trying to update
     await getGuildSettings(interaction.guild!.id);
 

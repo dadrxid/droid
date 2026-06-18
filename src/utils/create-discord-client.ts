@@ -3,6 +3,8 @@ import {Client, GatewayIntentBits} from 'discord.js';
 const intents = [
   GatewayIntentBits.Guilds,
   GatewayIntentBits.GuildMembers,
+  GatewayIntentBits.GuildMessages,
+  GatewayIntentBits.MessageContent,
   GatewayIntentBits.GuildMessageReactions,
   GatewayIntentBits.GuildVoiceStates,
 ];

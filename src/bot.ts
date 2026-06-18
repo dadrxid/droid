@@ -8,6 +8,7 @@ import debug from './utils/debug.js';
 import handleGuildCreate from './events/guild-create.js';
 import handleVoiceStateUpdate from './events/voice-state-update.js';
 import handleGuildMemberAdd from './events/guild-member-add.js';
+import handleMessageCreate from './events/message-create.js';
 import errorMsg from './utils/error-msg.js';
 import {isUserInVoice} from './utils/channels.js';
 import Config from './services/config.js';
@@ -276,5 +277,6 @@ export default class {
     client.on('guildCreate', handleGuildCreate);
     client.on('voiceStateUpdate', handleVoiceStateUpdate);
     client.on('guildMemberAdd', handleGuildMemberAdd);
+    client.on('messageCreate', handleMessageCreate);
   }
 }

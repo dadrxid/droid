@@ -2,37 +2,54 @@ import {SlashCommandBuilder} from '@discordjs/builders';
 import {ChatInputCommandInteraction, PermissionFlagsBits, Role} from 'discord.js';
 import {injectable} from 'inversify';
 import Command from './index.js';
-import {prisma} from '../utils/db.js';
-import {getGuildSettings} from '../utils/get-guild-settings.js';
+import {
+  describeAutoRoleStatus,
+  roleBelongsToGuild,
+  setAutoRoleForGuild,
+} from '../utils/assign-auto-role.js';
+import {GUILD_ADMIN_COMMAND_PERMISSIONS, requireGuildAdministrator} from '../utils/require-guild-admin.js';
 
 @injectable()
 export default class implements Command {
   public readonly slashCommand = new SlashCommandBuilder()
     .setName('autorole')
-    .setDescription('configure the auto role assigned to new members')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles.toString())
+    .setDescription('configure the auto role for this server only (Administrator only)')
+    .setDefaultMemberPermissions(GUILD_ADMIN_COMMAND_PERMISSIONS)
     .addSubcommand(subcommand => subcommand
       .setName('set')
-      .setDescription('set the role to assign to new members')
+      .setDescription('set the role new members get on this server')
       .addRoleOption(option => option
         .setName('role')
-        .setDescription('the role to assign')
+        .setDescription('role to assign on join (must be a role from this server)')
         .setRequired(true)))
     .addSubcommand(subcommand => subcommand
       .setName('disable')
-      .setDescription('disable auto role'))
+      .setDescription('disable auto role on this server only'))
     .addSubcommand(subcommand => subcommand
       .setName('status')
-      .setDescription('show the current auto role setting'));
+      .setDescription('show auto role for this server'));
 
   async execute(interaction: ChatInputCommandInteraction) {
+    if (!await requireGuildAdministrator(interaction)) {
+      return;
+    }
+
     const subcommand = interaction.options.getSubcommand();
-    const guildId = interaction.guild!.id;
+    const guild = interaction.guild!;
+    const guildId = guild.id;
 
     switch (subcommand) {
       case 'set': {
         const role = interaction.options.getRole('role') as Role;
-        const {members: {me}} = interaction.guild!;
+        const {members: {me}} = guild;
+
+        if (!roleBelongsToGuild(role, guildId)) {
+          await interaction.reply({
+            content: '🚫 that role is not from this server — pick a role from **this** guild',
+            ephemeral: true,
+          });
+          return;
+        }
 
         if (!me?.permissions.has(PermissionFlagsBits.ManageRoles)) {
           await interaction.reply({content: '🚫 I need the **Manage Roles** permission to assign auto roles', ephemeral: true});
@@ -44,7 +61,7 @@ export default class implements Command {
           return;
         }
 
-        if (role.id === interaction.guild!.roles.everyone.id) {
+        if (role.id === guild.roles.everyone.id) {
           await interaction.reply({content: '🚫 you cannot use the everyone role', ephemeral: true});
           return;
         }
@@ -54,46 +71,30 @@ export default class implements Command {
           return;
         }
 
-        await getGuildSettings(guildId);
+        await setAutoRoleForGuild(guildId, role.id);
 
-        await prisma.setting.update({
-          where: {guildId},
-          data: {autoRoleId: role.id},
+        await interaction.reply({
+          content: `✅ **${guild.name}**: auto role set to **${role.name}** (<@&${role.id}>)\nNew members on **this server only** will receive it on join. Other servers are unchanged.`,
+          ephemeral: true,
         });
-
-        await interaction.reply({content: `✅ auto role set to **${role.name}** — new members will receive it on join`, ephemeral: true});
         break;
       }
 
       case 'disable': {
-        await getGuildSettings(guildId);
+        await setAutoRoleForGuild(guildId, null);
 
-        await prisma.setting.update({
-          where: {guildId},
-          data: {autoRoleId: null},
+        await interaction.reply({
+          content: `✅ **${guild.name}**: auto role disabled on this server only. Other servers are unchanged.`,
+          ephemeral: true,
         });
-
-        await interaction.reply({content: '✅ auto role disabled', ephemeral: true});
         break;
       }
 
       case 'status': {
-        const setting = await prisma.setting.findUnique({where: {guildId}});
-        const roleId = setting?.autoRoleId;
-
-        if (!roleId) {
-          await interaction.reply({content: 'auto role is currently **disabled**', ephemeral: true});
-          return;
-        }
-
-        const role = interaction.guild!.roles.cache.get(roleId);
-
-        if (!role) {
-          await interaction.reply({content: 'auto role was set but the role no longer exists — use `/autorole disable` to clear it', ephemeral: true});
-          return;
-        }
-
-        await interaction.reply({content: `auto role is set to **${role.name}**`, ephemeral: true});
+        await interaction.reply({
+          content: await describeAutoRoleStatus(guild),
+          ephemeral: true,
+        });
         break;
       }
 

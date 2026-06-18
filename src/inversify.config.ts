@@ -42,7 +42,9 @@ import Skip from './commands/skip.js';
 import Stop from './commands/stop.js';
 import Unskip from './commands/unskip.js';
 import Volume from './commands/volume.js';
-import Welcome from './commands/welcome.js';
+import FaqDroidfix from './commands/faq-droidfix.js';
+import WelcomeDroidfix from './commands/welcome-droidfix.js';
+import WelcomeDroidlab from './commands/welcome-droidlab.js';
 import WelcomeTest from './commands/welcome-test.js';
 import FileCacheProvider from './services/file-cache.js';
 import KeyValueCacheProvider from './services/key-value-cache.js';
@@ -94,7 +96,9 @@ container.bind<YoutubeAPI>(TYPES.Services.YoutubeAPI).to(YoutubeAPI).inSingleton
   Stop,
   Unskip,
   Volume,
-  Welcome,
+  FaqDroidfix,
+  WelcomeDroidfix,
+  WelcomeDroidlab,
   WelcomeTest,
 ].forEach(command => {
   container.bind<Command>(TYPES.Command).to(command).inSingletonScope();
