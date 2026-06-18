@@ -32,19 +32,17 @@ export function scanDroidfixFaqLinks(guild: Guild): DroidfixFaqLinks {
     }
   }
 
-  for (const channel of textChannels) {
-    const name = channel.name;
-
+  for (const {id, name} of textChannels) {
     if (!links.askChannelId && CHANNEL_PATTERNS.askChannelId.some(pattern => pattern.test(name))) {
-      links.askChannelId = channel.id;
+      links.askChannelId = id;
     }
 
     if (!links.mailInChannelId && CHANNEL_PATTERNS.mailInChannelId.some(pattern => pattern.test(name))) {
-      links.mailInChannelId = channel.id;
+      links.mailInChannelId = id;
     }
 
     if (!links.welcomeChannelId && CHANNEL_PATTERNS.welcomeChannelId.some(pattern => pattern.test(name))) {
-      links.welcomeChannelId = channel.id;
+      links.welcomeChannelId = id;
     }
   }
 
@@ -74,8 +72,8 @@ export interface DroidfixFaqContext {
   links: DroidfixFaqLinks;
 }
 
-export function mentionChannel(channelId: string | undefined, label: string): string {
-  return channelId ? `<#${channelId}>` : label;
+export function mentionChannel(channelId: string | undefined, label: string | null | undefined): string {
+  return channelId ? `<#${channelId}>` : (label ?? 'unknown channel');
 }
 
 export function buildFaqContext(guild: Guild, linksJson: string | null | undefined): DroidfixFaqContext {

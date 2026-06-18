@@ -239,7 +239,7 @@ async function generateDroidfixWelcome(member: GuildMember): Promise<AttachmentB
     const mark = await loadImage(path.join(ASSETS_ROOT, 'droidfix/controller-mark.png'));
     const markSize = 72;
     const markX = width - 120;
-    const markY = height / 2 - markSize / 2;
+    const markY = (height / 2) - (markSize / 2);
 
     ctx.save();
     ctx.globalAlpha = 0.92;
@@ -248,8 +248,11 @@ async function generateDroidfixWelcome(member: GuildMember): Promise<AttachmentB
 
     ctx.strokeStyle = 'rgba(0, 136, 255, 0.18)';
     ctx.lineWidth = 1;
+    const markCenterX = markX + (markSize / 2);
+    const markCenterY = markY + (markSize / 2);
+    const markRingRadius = (markSize / 2) + 10;
     ctx.beginPath();
-    ctx.arc(markX + markSize / 2, markY + markSize / 2, markSize / 2 + 10, 0, Math.PI * 2);
+    ctx.arc(markCenterX, markCenterY, markRingRadius, 0, Math.PI * 2);
     ctx.stroke();
   } catch {
     // Optional asset

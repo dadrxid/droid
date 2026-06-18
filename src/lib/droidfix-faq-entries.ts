@@ -179,7 +179,7 @@ Claim: email **hello@droidfix.uk** with your name, DF-S reference, and what went
   },
   {
     id: 'no-fix',
-    triggers: ['no fix', 'cannot fix', "can't fix", 'cant fix', 'unrepairable', 'if you cant fix', 'if you cannot fix'],
+    triggers: ['no fix', 'cannot fix', 'can\'t fix', 'cant fix', 'unrepairable', 'if you cant fix', 'if you cannot fix'],
     buildReply: () => `**No fix, no fee.** If the agreed repair cannot be completed, you are not charged for that work.
 
 We will explain why and return your controller. You pay return postage.`,
@@ -214,7 +214,7 @@ We do not accept international mail-in at the moment.`,
   },
   {
     id: 'confirmation-email',
-    triggers: ['confirmation email', 'receipt email', 'order email', 'didnt get email', "didn't get email"],
+    triggers: ['confirmation email', 'receipt email', 'order email', 'didnt get email', 'didn\'t get email'],
     buildReply: ctx => `Your confirmation email is sent after Stripe payment. It includes your **DF-S** reference and mail-in address.
 
 Check spam. Still missing? Email **hello@droidfix.uk** or open ${ticket(ctx)} with the email you paid with.`,
@@ -232,11 +232,11 @@ Evenings and weekends for replies. Thanks for waiting.`,
   {
     id: 'trustpilot',
     triggers: ['trustpilot', 'leave a review', 'write a review', 'review site'],
-    buildReply: () => `If you are happy with your repair, a Trustpilot review helps a lot. Check your post-repair email if we sent an invite.`,
+    buildReply: () => 'If you are happy with your repair, a Trustpilot review helps a lot. Check your post-repair email if we sent an invite.',
   },
   {
     id: 'charging-port',
-    triggers: ['charging port', 'usb port', 'wont charge', "won't charge", 'not charging', 'charge port'],
+    triggers: ['charging port', 'usb port', 'wont charge', 'won\'t charge', 'not charging', 'charge port'],
     buildReply: () => `Charging port repairs are usually **3 to 7 working days** once we receive your controller.
 
 Browse: https://droidfix.uk`,

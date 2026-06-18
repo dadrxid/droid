@@ -3,7 +3,7 @@ import {ChatInputCommandInteraction, GuildMember, PermissionFlagsBits} from 'dis
 const DEFAULT_OWNER_ID = '397068987000815616';
 
 function isBotOwner(userId: string): boolean {
-  const ownerId = process.env.BOT_OWNER_ID?.trim() || DEFAULT_OWNER_ID;
+  const ownerId = process.env.BOT_OWNER_ID?.trim() ?? DEFAULT_OWNER_ID;
   return userId === ownerId;
 }
 
