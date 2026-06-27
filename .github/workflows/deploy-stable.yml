@@ -38,6 +38,9 @@ jobs:
       - run: yarn lint
       - run: yarn typecheck
 
+      - name: Verify fork production safeguards
+        run: bash .github/scripts/verify-production-pin.sh
+
   publish:
     name: Build and push stable image
     runs-on: ubuntu-latest

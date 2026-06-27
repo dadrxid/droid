@@ -45,9 +45,7 @@ jobs:
       - run: yarn typecheck
 
       - name: Verify production safeguards
-        run: |
-          grep -q 'ghcr.io/dadrxid/droid:stable' docker-compose.yml
-          ! grep -E 'ghcr.io/museofficial|:latest' docker-compose.yml
+        run: bash .github/scripts/verify-production-pin.sh
 
       - name: Push merge commit
         run: git push origin HEAD:master

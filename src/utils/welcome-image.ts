@@ -39,44 +39,57 @@ const DROIDLAB = {
   footer: '#1e3a4a',
 } as const;
 
-async function drawRoundedMemberAvatar(
-  ctx: SKRSContext2D,
-  member: GuildMember,
-  x: number,
-  y: number,
-  size: number,
-  radius: number,
-): Promise<void> {
-  const drawRoundedRect = (px: number, py: number, w: number, h: number, r: number) => {
-    ctx.beginPath();
-    ctx.moveTo(px + r, py);
-    ctx.lineTo(px + w - r, py);
-    ctx.quadraticCurveTo(px + w, py, px + w, py + r);
-    ctx.lineTo(px + w, py + h - r);
-    ctx.quadraticCurveTo(px + w, py + h, px + w - r, py + h);
-    ctx.lineTo(px + r, py + h);
-    ctx.quadraticCurveTo(px, py + h, px, py + h - r);
-    ctx.lineTo(px, py + r);
-    ctx.quadraticCurveTo(px, py, px + r, py);
-    ctx.closePath();
-  };
+interface RoundedRect {
+  px: number;
+  py: number;
+  w: number;
+  h: number;
+  r: number;
+}
+
+function drawRoundedRectPath(ctx: SKRSContext2D, rect: RoundedRect): void {
+  const {px, py, w, h, r} = rect;
+  ctx.beginPath();
+  ctx.moveTo(px + r, py);
+  ctx.lineTo(px + w - r, py);
+  ctx.quadraticCurveTo(px + w, py, px + w, py + r);
+  ctx.lineTo(px + w, py + h - r);
+  ctx.quadraticCurveTo(px + w, py + h, px + w - r, py + h);
+  ctx.lineTo(px + r, py + h);
+  ctx.quadraticCurveTo(px, py + h, px, py + h - r);
+  ctx.lineTo(px, py + r);
+  ctx.quadraticCurveTo(px, py, px + r, py);
+  ctx.closePath();
+}
+
+interface RoundedAvatarDraw {
+  ctx: SKRSContext2D;
+  member: GuildMember;
+  x: number;
+  y: number;
+  size: number;
+  radius: number;
+}
+
+async function drawRoundedMemberAvatar(options: RoundedAvatarDraw): Promise<void> {
+  const {ctx, member, x, y, size, radius} = options;
 
   ctx.strokeStyle = DROIDFIX.brand;
   ctx.lineWidth = 2;
-  drawRoundedRect(x - 2, y - 2, size + 4, size + 4, radius + 2);
+  drawRoundedRectPath(ctx, {px: x - 2, py: y - 2, w: size + 4, h: size + 4, r: radius + 2});
   ctx.stroke();
 
   try {
     const avatarUrl = member.user.displayAvatarURL({extension: 'png', size: 128});
     const avatar = await loadImage(avatarUrl);
     ctx.save();
-    drawRoundedRect(x, y, size, size, radius);
+    drawRoundedRectPath(ctx, {px: x, py: y, w: size, h: size, r: radius});
     ctx.clip();
     ctx.drawImage(avatar, x, y, size, size);
     ctx.restore();
   } catch {
     ctx.fillStyle = '#152030';
-    drawRoundedRect(x, y, size, size, radius);
+    drawRoundedRectPath(ctx, {px: x, py: y, w: size, h: size, r: radius});
     ctx.fill();
   }
 }
@@ -134,15 +147,18 @@ export async function generateWelcomeImage(
   return generateDroidlabWelcome(member);
 }
 
-async function drawMemberAvatar(
-  ctx: SKRSContext2D,
-  member: GuildMember,
-  avatarX: number,
-  avatarY: number,
-  avatarRadius: number,
-  outerRing: string,
-  innerRing: string,
-): Promise<void> {
+interface MemberAvatarDraw {
+  ctx: SKRSContext2D;
+  member: GuildMember;
+  avatarX: number;
+  avatarY: number;
+  avatarRadius: number;
+  outerRing: string;
+  innerRing: string;
+}
+
+async function drawMemberAvatar(options: MemberAvatarDraw): Promise<void> {
+  const {ctx, member, avatarX, avatarY, avatarRadius, outerRing, innerRing} = options;
   ctx.strokeStyle = outerRing;
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -300,7 +316,7 @@ async function generateDroidfixWelcome(member: GuildMember): Promise<AttachmentB
   ctx.fillStyle = DROIDFIX.muted;
   ctx.fillText('No fix, no fee · postage both ways', contentX, 284);
 
-  await drawRoundedMemberAvatar(ctx, member, avatarX, avatarY, avatarSize, 18);
+  await drawRoundedMemberAvatar({ctx, member, x: avatarX, y: avatarY, size: avatarSize, radius: 18});
 
   const buffer = canvas.toBuffer('image/png');
   return new AttachmentBuilder(buffer, {name: 'welcome-droidfix.png'});
@@ -330,15 +346,15 @@ async function generateDroidlabWelcome(member: GuildMember): Promise<AttachmentB
   const avatarX = 100;
   const avatarY = height / 2;
   const avatarRadius = 55;
-  await drawMemberAvatar(
+  await drawMemberAvatar({
     ctx,
     member,
     avatarX,
     avatarY,
     avatarRadius,
-    DROIDLAB.brand,
-    'rgba(0, 180, 160, 0.4)',
-  );
+    outerRing: DROIDLAB.brand,
+    innerRing: 'rgba(0, 180, 160, 0.4)',
+  });
 
   const textX = 190;
 
