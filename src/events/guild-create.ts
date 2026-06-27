@@ -30,11 +30,16 @@ export default async (guild: Guild): Promise<void> => {
   if (!config.REGISTER_COMMANDS_ON_BOT) {
     const client = getActiveDiscordClient();
     const rest = new REST({version: '10'}).setToken(config.DISCORD_TOKEN);
-    await registerCommandsOnGuild({
-      rest,
-      applicationId: client.user!.id,
-      guildId: guild.id,
-      commands: container.getAll<Command>(TYPES.Command).map(command => command.slashCommand),
-    });
+
+    try {
+      await registerCommandsOnGuild({
+        rest,
+        applicationId: client.user!.id,
+        guildId: guild.id,
+        commands: container.getAll<Command>(TYPES.Command).map(command => command.slashCommand),
+      });
+    } catch (error: unknown) {
+      console.error(`Failed to register slash commands for new guild ${guild.name} (${guild.id}):`, error);
+    }
   }
 };

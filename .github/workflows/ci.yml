@@ -39,6 +39,18 @@ jobs:
       - run: yarn lint
       - run: yarn typecheck
 
+      - name: Verify fork production safeguards
+        run: |
+          grep -q 'ghcr.io/dadrxid/droid:stable' docker-compose.yml
+          if grep -E 'ghcr.io/museofficial|:latest' docker-compose.yml; then
+            echo 'docker-compose.yml must pin ghcr.io/dadrxid/droid:stable — never upstream or :latest'
+            exit 1
+          fi
+          if grep -q 'paths:.*deploy-stable.trigger' .github/workflows/deploy-stable.yml; then
+            echo 'Deploy Stable must not auto-run on push — use workflow_dispatch only'
+            exit 1
+          fi
+
       - name: Verify Docker image builds
         uses: docker/build-push-action@v7
         with:

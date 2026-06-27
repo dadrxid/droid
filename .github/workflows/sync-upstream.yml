@@ -1,0 +1,53 @@
+name: Sync Upstream (manual)
+
+# Safe upstream merge path — never auto-runs. Review the diff, then run this workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: 'Upstream branch or tag to merge (default: upstream/master)'
+        required: false
+        default: 'upstream/master'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/museofficial/muse.git || git remote set-url upstream https://github.com/museofficial/muse.git
+          git fetch upstream
+
+      - name: Merge upstream
+        run: |
+          ref="${{ github.event.inputs.upstream_ref }}"
+          git merge "$ref" --no-edit -m "Merge ${ref} from museofficial/muse (manual upstream sync)"
+
+      - name: Verify fork after merge
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'yarn'
+
+      - run: yarn install --frozen-lockfile
+      - run: yarn prisma generate
+      - run: yarn lint
+      - run: yarn typecheck
+
+      - name: Verify production safeguards
+        run: |
+          grep -q 'ghcr.io/dadrxid/droid:stable' docker-compose.yml
+          ! grep -E 'ghcr.io/museofficial|:latest' docker-compose.yml
+
+      - name: Push merge commit
+        run: git push origin HEAD:master

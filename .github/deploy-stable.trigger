@@ -1,3 +1,3 @@
-# Touch this file and push to master to run the Deploy Stable workflow.
-# Do not edit manually unless you intend to publish ghcr.io/dadrxid/droid:stable
-triggered_at=2026-06-18T22:15:00Z
+# Deploy Stable no longer runs when this file changes.
+# Publish production images manually: GitHub → Actions → "Deploy Stable" → Run workflow.
+# After it succeeds, pull ghcr.io/dadrxid/droid:stable in Portainer and recreate the container.

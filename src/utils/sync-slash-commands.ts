@@ -23,27 +23,44 @@ function formatDiscordApiError(error: unknown): string {
   return String(error);
 }
 
+export interface SlashCommandSyncResult {
+  succeeded: number;
+  failed: number;
+}
+
 export async function syncSlashCommands({
   rest,
   client,
   commands,
   registerGlobally,
-}: SyncSlashCommandsOptions): Promise<void> {
+}: SyncSlashCommandsOptions): Promise<SlashCommandSyncResult> {
   const applicationId = client.user!.id;
   const payload = commands.map(command => command.slashCommand.toJSON());
 
   if (registerGlobally) {
     console.log(`Syncing ${String(payload.length)} slash commands globally...`);
-    await rest.put(Routes.applicationCommands(applicationId), {body: payload});
-    console.log('Global slash commands synced.');
-    return;
+    try {
+      await rest.put(Routes.applicationCommands(applicationId), {body: payload});
+      console.log('Global slash commands synced.');
+      return {succeeded: 1, failed: 0};
+    } catch (error: unknown) {
+      console.error(`Failed to sync global slash commands: ${formatDiscordApiError(error)}`);
+      return {succeeded: 0, failed: 1};
+    }
   }
 
   console.log('Clearing global slash commands (using per-guild registration)...');
-  await rest.put(Routes.applicationCommands(applicationId), {body: []});
+  try {
+    await rest.put(Routes.applicationCommands(applicationId), {body: []});
+  } catch (error: unknown) {
+    console.warn(`Could not clear global slash commands (non-fatal): ${formatDiscordApiError(error)}`);
+  }
 
   const guilds = [...client.guilds.cache.values()];
   console.log(`Syncing ${String(payload.length)} slash commands to ${String(guilds.length)} guild(s)...`);
+
+  let succeeded = 0;
+  let failed = 0;
 
   for (const guild of guilds) {
     try {
@@ -55,9 +72,19 @@ export async function syncSlashCommands({
         commands: commands.map(command => command.slashCommand),
       });
       console.log(`Slash commands synced for guild ${guild.name} (${guild.id})`);
+      succeeded += 1;
     } catch (error: unknown) {
+      failed += 1;
       console.error(`Failed to sync slash commands for guild ${guild.name} (${guild.id}): ${formatDiscordApiError(error)}`);
-      throw error;
     }
   }
+
+  if (failed > 0) {
+    console.warn(
+      `Slash command sync finished with ${String(failed)} failure(s) and ${String(succeeded)} success(es). `
+      + 'The bot stays online — music and existing commands keep working. Retries on next restart.',
+    );
+  }
+
+  return {succeeded, failed};
 }

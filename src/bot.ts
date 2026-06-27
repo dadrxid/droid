@@ -224,18 +224,23 @@ export default class {
       const commandNames = [...this.commandsByName.keys()].sort();
       console.log(`Slash commands (${commandNames.length}) commit=${process.env.COMMIT_HASH ?? 'unknown'}: ${commandNames.join(', ')}`);
 
-      try {
-        await syncSlashCommands({
-          rest,
-          client,
-          commands: [...this.commandsByName.values()],
-          registerGlobally: this.shouldRegisterCommandsOnBot,
-        });
+      const syncResult = await syncSlashCommands({
+        rest,
+        client,
+        commands: [...this.commandsByName.values()],
+        registerGlobally: this.shouldRegisterCommandsOnBot,
+      });
+
+      if (syncResult.failed > 0 && syncResult.succeeded === 0) {
+        spinner.warn('Connected to Discord but slash command sync failed — bot stays online for music');
+        console.warn(
+          'Slash commands may be outdated until sync succeeds (Discord rate limits, API errors). '
+          + 'Restart once after the reset time in logs if you hit session limits.',
+        );
+      } else if (syncResult.failed > 0) {
+        spinner.warn('Connected — some guilds failed slash command sync (bot stays online)');
+      } else {
         console.log(`Slash commands synced to Discord (global=${String(this.shouldRegisterCommandsOnBot)}, guilds=${client.guilds.cache.size})`);
-      } catch (error: unknown) {
-        spinner.fail('Failed to sync slash commands to Discord');
-        console.error(error);
-        process.exit(1);
       }
 
       client.user!.setPresence({

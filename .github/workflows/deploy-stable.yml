@@ -1,6 +1,6 @@
 name: Deploy Stable
 
-# Manual production deploy — only you decide when Portainer should get a new image.
+# Manual production deploy ONLY — never auto-runs on push (prevents broken commits from reaching Portainer).
 on:
   workflow_dispatch:
     inputs:
@@ -8,10 +8,6 @@ on:
         description: 'Extra image tag to publish (default: stable + package version + commit sha)'
         required: false
         type: string
-  push:
-    branches: [master]
-    paths:
-      - '.github/deploy-stable.trigger'
 
 concurrency:
   group: deploy-stable

@@ -1,6 +1,6 @@
 name: Build and Push Docker Image
 
-# Manual fallback — CI publishes on every master push
+# Manual fallback — does not run on push; use Deploy Stable for production
 on:
   workflow_dispatch:
 
