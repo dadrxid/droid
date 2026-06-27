@@ -1,6 +1,6 @@
 name: Deploy Stable
 
-# Manual production deploy ONLY — never auto-runs on push (prevents broken commits from reaching Portainer).
+# Production deploy: run manually in Actions, or push a change to deploy-stable.trigger.
 on:
   workflow_dispatch:
     inputs:
@@ -8,6 +8,10 @@ on:
         description: 'Extra image tag to publish (default: stable + package version + commit sha)'
         required: false
         type: string
+  push:
+    branches: [master]
+    paths:
+      - '.github/deploy-stable.trigger'
 
 concurrency:
   group: deploy-stable

@@ -1,3 +1,3 @@
-# Deploy Stable no longer runs when this file changes.
-# Publish production images manually: GitHub → Actions → "Deploy Stable" → Run workflow.
-# After it succeeds, pull ghcr.io/dadrxid/droid:stable in Portainer and recreate the container.
+# Touch this file and push to master to publish ghcr.io/dadrxid/droid:stable (CI must pass first).
+# Or use GitHub → Actions → Deploy Stable → Run workflow.
+deploy: 2026-06-02T19:45:00Z commit=6d49435
