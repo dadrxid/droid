@@ -36,7 +36,7 @@ model Setting {
   turnDownVolumeWhenPeopleSpeakTarget Int      @default(20)
   autoRoleId                          String?
   droidlabWelcomeChannelId            String?
-  droidfixWelcomeChannelId            String?
+  droidfixJoinChannelId               String?
   droidfixFaqChannelId                String?
   droidfixFaqLinks                    String?
   createdAt                           DateTime @default(now())

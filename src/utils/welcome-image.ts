@@ -39,82 +39,6 @@ const DROIDLAB = {
   footer: '#1e3a4a',
 } as const;
 
-interface RoundedRect {
-  px: number;
-  py: number;
-  w: number;
-  h: number;
-  r: number;
-}
-
-function drawRoundedRectPath(ctx: SKRSContext2D, rect: RoundedRect): void {
-  const {px, py, w, h, r} = rect;
-  ctx.beginPath();
-  ctx.moveTo(px + r, py);
-  ctx.lineTo(px + w - r, py);
-  ctx.quadraticCurveTo(px + w, py, px + w, py + r);
-  ctx.lineTo(px + w, py + h - r);
-  ctx.quadraticCurveTo(px + w, py + h, px + w - r, py + h);
-  ctx.lineTo(px + r, py + h);
-  ctx.quadraticCurveTo(px, py + h, px, py + h - r);
-  ctx.lineTo(px, py + r);
-  ctx.quadraticCurveTo(px, py, px + r, py);
-  ctx.closePath();
-}
-
-interface RoundedAvatarDraw {
-  ctx: SKRSContext2D;
-  member: GuildMember;
-  x: number;
-  y: number;
-  size: number;
-  radius: number;
-}
-
-async function drawRoundedMemberAvatar(options: RoundedAvatarDraw): Promise<void> {
-  const {ctx, member, x, y, size, radius} = options;
-
-  ctx.strokeStyle = DROIDFIX.brand;
-  ctx.lineWidth = 2;
-  drawRoundedRectPath(ctx, {px: x - 2, py: y - 2, w: size + 4, h: size + 4, r: radius + 2});
-  ctx.stroke();
-
-  try {
-    const avatarUrl = member.user.displayAvatarURL({extension: 'png', size: 128});
-    const avatar = await loadImage(avatarUrl);
-    ctx.save();
-    drawRoundedRectPath(ctx, {px: x, py: y, w: size, h: size, r: radius});
-    ctx.clip();
-    ctx.drawImage(avatar, x, y, size, size);
-    ctx.restore();
-  } catch {
-    ctx.fillStyle = '#152030';
-    drawRoundedRectPath(ctx, {px: x, py: y, w: size, h: size, r: radius});
-    ctx.fill();
-  }
-}
-
-function drawDroidfixReceiptLines(ctx: SKRSContext2D, width: number, height: number, startX: number): void {
-  ctx.strokeStyle = DROIDFIX.receiptLine;
-  ctx.lineWidth = 1;
-
-  for (let y = 54; y < height - 36; y += 28) {
-    ctx.beginPath();
-    ctx.moveTo(startX, y);
-    ctx.lineTo(width - 36, y);
-    ctx.stroke();
-  }
-}
-
-function drawDroidfixAccentStripe(ctx: SKRSContext2D, height: number): void {
-  const stripe = ctx.createLinearGradient(0, 0, 0, height);
-  stripe.addColorStop(0, DROIDFIX.brandLight);
-  stripe.addColorStop(0.5, DROIDFIX.accentStripe);
-  stripe.addColorStop(1, DROIDFIX.brandDark);
-  ctx.fillStyle = stripe;
-  ctx.fillRect(0, 0, 8, height);
-}
-
 function drawTextPill(
   ctx: SKRSContext2D,
   text: string,
@@ -246,77 +170,115 @@ function drawBrackets(ctx: SKRSContext2D, width: number, height: number, color: 
 }
 
 async function generateDroidfixWelcome(member: GuildMember): Promise<AttachmentBuilder> {
-  const width = 900;
-  const height = 300;
+  const width = 960;
+  const height = 320;
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext('2d');
-  const contentX = 40;
-  const avatarSize = 96;
-  const avatarX = width - avatarSize - 44;
-  const avatarY = (height - avatarSize) / 2;
+  const pad = 36;
+  const avatarSize = 112;
+  const avatarRadius = avatarSize / 2;
+  const avatarX = pad + avatarRadius;
+  const avatarY = height / 2;
+  const textX = pad + avatarSize + 32;
 
-  ctx.fillStyle = DROIDFIX.warmBg;
+  const bg = ctx.createLinearGradient(0, 0, width, height);
+  bg.addColorStop(0, '#121820');
+  bg.addColorStop(0.55, '#0c1018');
+  bg.addColorStop(1, '#070a0f');
+  ctx.fillStyle = bg;
   ctx.fillRect(0, 0, width, height);
 
-  drawDroidfixAccentStripe(ctx, height);
+  const glow = ctx.createRadialGradient(pad, pad, 0, pad, pad, 420);
+  glow.addColorStop(0, 'rgba(0, 136, 255, 0.22)');
+  glow.addColorStop(0.45, 'rgba(0, 136, 255, 0.06)');
+  glow.addColorStop(1, 'transparent');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, width, height);
 
-  ctx.fillStyle = DROIDFIX.panel;
-  ctx.fillRect(8, 16, width - 24, height - 32);
-  ctx.strokeStyle = DROIDFIX.panelEdge;
-  ctx.lineWidth = 1;
-  ctx.strokeRect(8.5, 16.5, width - 25, height - 33);
-
-  drawDroidfixReceiptLines(ctx, width, height, contentX);
+  ctx.fillStyle = DROIDFIX.accentStripe;
+  ctx.fillRect(0, height - 4, width, 4);
 
   try {
     const mark = await loadImage(path.join(ASSETS_ROOT, 'droidfix/controller-mark.png'));
     ctx.save();
-    ctx.globalAlpha = 0.06;
-    ctx.drawImage(mark, width - 280, 24, 220, 220);
+    ctx.globalAlpha = 0.045;
+    ctx.drawImage(mark, width - 300, height - 280, 260, 260);
     ctx.restore();
   } catch {
     // Optional asset
   }
 
-  let pillX = contentX;
-  pillX += drawTextPill(ctx, 'UK MAIL-IN', pillX, 34) + 10;
-  pillX += drawTextPill(ctx, 'CONTROLLER REPAIR', pillX, 34) + 10;
-  drawTextPill(ctx, '90-DAY GUARANTEE', pillX, 34);
+  ctx.strokeStyle = 'rgba(0, 136, 255, 0.35)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(avatarX, avatarY, avatarRadius + 10, 0, Math.PI * 2);
+  ctx.stroke();
 
-  ctx.font = 'bold 40px sans-serif';
-  ctx.fillStyle = '#ffffff';
-  ctx.fillText('DROID', contentX, 98);
-  const droidWidth = ctx.measureText('DROID').width;
-  ctx.fillStyle = DROIDFIX.brand;
-  ctx.fillText('FIX', contentX + droidWidth + 3, 98);
+  ctx.strokeStyle = 'rgba(0, 136, 255, 0.12)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(avatarX, avatarY, avatarRadius + 18, 0, Math.PI * 2);
+  ctx.stroke();
 
-  ctx.font = '600 14px sans-serif';
-  ctx.fillStyle = DROIDFIX.muted;
-  ctx.fillText('Solo repair shop · Middlesbrough · UK', contentX, 122);
-
-  ctx.font = 'bold 28px sans-serif';
-  ctx.fillStyle = DROIDFIX.text;
-  ctx.fillText('Glad you made it.', contentX, 168);
-
-  const displayName = member.displayName.slice(0, 28);
-  ctx.font = '16px sans-serif';
-  ctx.fillStyle = DROIDFIX.text;
-  ctx.fillText(displayName, contentX, 198);
-
-  ctx.font = '13px sans-serif';
-  ctx.fillStyle = DROIDFIX.dim;
-  ctx.fillText(`Member #${member.guild.memberCount}`, contentX, 222);
-
-  let platformX = contentX;
-  for (const label of ['PS5', 'PS4', 'Xbox Series']) {
-    platformX += drawTextPill(ctx, label, platformX, 248) + 8;
+  try {
+    const avatarUrl = member.user.displayAvatarURL({extension: 'png', size: 256});
+    const avatar = await loadImage(avatarUrl);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(avatarX, avatarY, avatarRadius, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
+    ctx.drawImage(avatar, avatarX - avatarRadius, avatarY - avatarRadius, avatarSize, avatarSize);
+    ctx.restore();
+  } catch {
+    ctx.fillStyle = '#152030';
+    ctx.beginPath();
+    ctx.arc(avatarX, avatarY, avatarRadius, 0, Math.PI * 2);
+    ctx.fill();
   }
 
-  ctx.font = '12px sans-serif';
-  ctx.fillStyle = DROIDFIX.muted;
-  ctx.fillText('No fix, no fee · postage both ways', contentX, 284);
+  let logoEndX = textX;
+  try {
+    const logo = await loadImage(path.join(ASSETS_ROOT, 'droidfix/logo-square.png'));
+    const logoSize = 44;
+    ctx.drawImage(logo, textX, 52, logoSize, logoSize);
+    logoEndX = textX + logoSize + 12;
+  } catch {
+    logoEndX = textX;
+  }
 
-  await drawRoundedMemberAvatar({ctx, member, x: avatarX, y: avatarY, size: avatarSize, radius: 18});
+  ctx.font = 'bold 11px sans-serif';
+  ctx.fillStyle = DROIDFIX.brandLight;
+  ctx.fillText('WELCOME TO', logoEndX, 58);
+
+  ctx.font = 'bold 44px sans-serif';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText('DROID', logoEndX, 104);
+  const droidWidth = ctx.measureText('DROID').width;
+  ctx.fillStyle = DROIDFIX.brand;
+  ctx.fillText('FIX', logoEndX + droidWidth + 4, 104);
+
+  ctx.font = '600 13px sans-serif';
+  ctx.fillStyle = DROIDFIX.muted;
+  ctx.fillText('UK mail-in · Middlesbrough', logoEndX, 126);
+
+  const displayName = member.displayName.slice(0, 32);
+  ctx.font = 'bold 30px sans-serif';
+  ctx.fillStyle = DROIDFIX.text;
+  ctx.fillText(displayName, textX, 178);
+
+  ctx.font = '15px sans-serif';
+  ctx.fillStyle = DROIDFIX.dim;
+  ctx.fillText(`Member #${String(member.guild.memberCount)}`, textX, 206);
+
+  let pillX = textX;
+  for (const label of ['PS5', 'PS4', 'Xbox']) {
+    pillX += drawTextPill(ctx, label, pillX, 232) + 8;
+  }
+
+  ctx.font = '600 12px sans-serif';
+  ctx.fillStyle = DROIDFIX.muted;
+  ctx.fillText('droidfix.uk · No fix, no fee · 90-day guarantee', textX, 278);
 
   const buffer = canvas.toBuffer('image/png');
   return new AttachmentBuilder(buffer, {name: 'welcome-droidfix.png'});

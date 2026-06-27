@@ -11,7 +11,7 @@ const OWNER_ID = process.env.BOT_OWNER_ID ?? '397068987000815616';
 export default class implements Command {
   public readonly slashCommand = new SlashCommandBuilder()
     .setName('welcometest')
-    .setDescription('Test a welcome card (owner only)')
+    .setDescription('Test a welcome card (owner only — DroidFix sends text only on real joins)')
     .addStringOption(option => option
       .setName('theme')
       .setDescription('which welcome card to test')
@@ -39,12 +39,12 @@ export default class implements Command {
 
       if (!sent) {
         await interaction.editReply(
-          `No channel configured for **${theme === 'droidfix' ? 'DroidFix' : 'DroidLab'}**. Use /welcome-${theme} set first.`,
+          `No join channel configured for **${theme === 'droidfix' ? 'DroidFix' : 'DroidLab'}**. Use /welcome-${theme} set first.`,
         );
         return;
       }
 
-      await interaction.editReply(`**${theme === 'droidfix' ? 'DroidFix' : 'DroidLab'}** welcome card sent.`);
+      await interaction.editReply(`**${theme === 'droidfix' ? 'DroidFix' : 'DroidLab'}** join message sent.`);
     } catch (error) {
       await interaction.editReply(`Error: ${String(error)}`);
     }
