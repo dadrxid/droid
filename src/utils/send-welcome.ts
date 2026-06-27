@@ -20,7 +20,7 @@ function channelIdForTheme(
 
 function buildJoinMessage(member: GuildMember, theme: WelcomeTheme): string {
   if (theme === 'droidfix') {
-    return `👋 Welcome <@${member.id}>`;
+    return `👋 <@${member.id}>`;
   }
 
   return `Hey <@${member.id}>, you're in.`;
@@ -37,11 +37,6 @@ export async function sendWelcome(member: GuildMember, theme: WelcomeTheme): Pro
   const channel = member.guild.channels.cache.get(joinChannelId);
   if (!channel?.isTextBased()) {
     return false;
-  }
-
-  if (theme === 'droidfix') {
-    await (channel as TextChannel).send(buildJoinMessage(member, theme));
-    return true;
   }
 
   const attachment = await generateWelcomeImage(member, theme);
