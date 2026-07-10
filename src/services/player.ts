@@ -22,7 +22,7 @@ import FileCacheProvider from './file-cache.js';
 import debug from '../utils/debug.js';
 import {getGuildSettings} from '../utils/get-guild-settings.js';
 import {buildPlayingMessageEmbed, buildPlayerButtons} from '../utils/build-embed.js';
-import {getYouTubeMediaSource} from '../utils/yt-dlp.js';
+import {getYouTubeMediaSource, prefetchYouTubeMediaSource} from '../utils/yt-dlp.js';
 import {Setting} from '@prisma/client';
 
 export enum MediaSource {
@@ -107,13 +107,15 @@ export default class {
 
     // Always get freshest default volume setting value
     const settings = await getGuildSettings(this.guildId);
-    const {defaultVolume = DEFAULT_VOLUME} = settings;
+    const {defaultVolume = DEFAULT_VOLUME, turnDownVolumeWhenPeopleSpeak} = settings;
     this.defaultVolume = defaultVolume;
 
+    // Stay deafened unless we need to hear users for auto volume ducking.
+    // Receiving voice packets otherwise wastes CPU and can add audio lag.
     const voiceConnection = joinVoiceChannel({
       channelId: channel.id,
       guildId: channel.guild.id,
-      selfDeaf: false,
+      selfDeaf: !turnDownVolumeWhenPeopleSpeak,
       adapterCreator: channel.guild.voiceAdapterCreator as DiscordGatewayAdapterCreator,
     });
 
@@ -121,7 +123,7 @@ export default class {
     this.currentChannel = channel;
     this.hasRegisteredVoiceActivityListener = false;
 
-    const guildSettings = await getGuildSettings(this.guildId);
+    const guildSettings = settings;
     const stateTransitions = [voiceConnection.state.status];
     voiceConnection.on('stateChange', (oldState, newState) => {
       stateTransitions.push(newState.status);
@@ -273,6 +275,7 @@ export default class {
 
       this.status = STATUS.PLAYING;
       this.nowPlaying = currentSong;
+      this.prefetchUpcomingTrack();
 
       if (currentSong.url === this.lastSongURL) {
         this.startTrackingPosition();
@@ -549,7 +552,7 @@ export default class {
     }
 
     if (song.source === MediaSource.HLS) {
-      return this.createReadStream({url: song.url, cacheKey: song.url});
+      return this.createReadStream({url: song.url, cacheKey: song.url, isLive: true});
     }
 
     let ffmpegInput: string | null;
@@ -573,14 +576,16 @@ export default class {
 
       debug(shouldCacheVideo ? 'Caching video' : 'Not caching video');
 
-      ffmpegInputOptions.push(...[
-        '-reconnect',
-        '1',
-        '-reconnect_streamed',
-        '1',
-        '-reconnect_delay_max',
-        '5',
-      ]);
+      // Low-latency network input options for YouTube CDN streams
+      ffmpegInputOptions.push(
+        '-reconnect', '1',
+        '-reconnect_streamed', '1',
+        '-reconnect_delay_max', '5',
+        '-fflags', '+discardcorrupt+nobuffer',
+        '-flags', 'low_delay',
+        '-probesize', '32768',
+        '-analyzeduration', '0',
+      );
 
       const headerOptions = this.buildFfmpegHeaderOptions(mediaSource.headers);
       ffmpegInputOptions.push(...headerOptions);
@@ -599,7 +604,17 @@ export default class {
       cacheKey: song.url,
       ffmpegInputOptions,
       cache: shouldCacheVideo && !this.fileCache.isWriteInProgress(this.getHashForCache(song.url)),
+      isLive: song.isLive,
     });
+  }
+
+  private prefetchUpcomingTrack(): void {
+    const nextSong = this.queue[this.queuePosition + 1];
+    if (!nextSong || nextSong.source !== MediaSource.Youtube) {
+      return;
+    }
+
+    prefetchYouTubeMediaSource(nextSong.url);
   }
 
   private startTrackingPosition(initalPosition?: number): void {
@@ -776,7 +791,13 @@ export default class {
     return ['-headers', `${headerLines}\r\n`];
   }
 
-  private async createReadStream(options: {url: string; cacheKey: string; ffmpegInputOptions?: string[]; cache?: boolean}): Promise<Readable> {
+  private async createReadStream(options: {
+    url: string;
+    cacheKey: string;
+    ffmpegInputOptions?: string[];
+    cache?: boolean;
+    isLive?: boolean;
+  }): Promise<Readable> {
     return new Promise((resolve, reject) => {
       const capacitor = new WriteStream();
 
@@ -785,13 +806,29 @@ export default class {
         capacitor.createReadStream().pipe(cacheStream);
       }
 
-      const returnedStream = capacitor.createReadStream();
+      // Larger buffer reduces underruns / stutter under CPU or network spikes
+      const returnedStream = capacitor.createReadStream({highWaterMark: 1 << 20});
       let hasReturnedStreamClosed = false;
 
+      // Never use -re for file/cache playback — it forces real-time read and causes lag.
+      // Only use it for true live HLS sources.
+      const inputOptions = options.ffmpegInputOptions?.length
+        ? options.ffmpegInputOptions
+        : (options.isLive ? ['-re'] : []);
+
       const stream = ffmpeg(options.url)
-        .inputOptions(options?.ffmpegInputOptions ?? ['-re'])
+        .inputOptions(inputOptions)
         .noVideo()
         .audioCodec('libopus')
+        .audioBitrate('96k')
+        .outputOptions([
+          // Faster encode = less CPU lag while still sounding fine for Discord
+          '-vbr', 'on',
+          '-compression_level', '5',
+          '-application', 'audio',
+          '-frame_duration', '20',
+          '-threads', '2',
+        ])
         .outputFormat('webm')
         .on('error', error => {
           if (!hasReturnedStreamClosed) {
@@ -817,6 +854,8 @@ export default class {
     return createAudioResource(stream, {
       inputType: StreamType.WebmOpus,
       inlineVolume: true,
+      // Smooths start/end of tracks and reduces audible gaps
+      silencePaddingFrames: 5,
     });
   }
 

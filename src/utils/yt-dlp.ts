@@ -36,9 +36,17 @@ export interface YtDlpUpdateResult {
   readonly error?: string;
 }
 
+// YouTube CDN URLs expire; keep a short in-memory cache to speed up skips / prefetch.
+const MEDIA_SOURCE_TTL_MS = 4 * 60 * 1000;
+const mediaSourceCache = new Map<string, {source: YtDlpMediaSource; expiresAt: number}>();
+
 const firstNonEmpty = (...values: Array<string | undefined>) => values
   .map(value => value?.trim())
   .find((value): value is string => Boolean(value));
+
+const mediaCacheKey = (videoIdOrUrl: string) => (
+  videoIdOrUrl.length === 11 ? videoIdOrUrl : toYouTubeWatchUrl(videoIdOrUrl)
+);
 
 export const getExecutable = () => {
   const configuredPath = firstNonEmpty(process.env.YT_DLP_PATH, process.env.MUSE_BUNDLED_YT_DLP_PATH);
@@ -246,6 +254,12 @@ export const updateYtDlp = async (): Promise<YtDlpUpdateResult> => {
 };
 
 export const getYouTubeMediaSource = async (videoIdOrUrl: string): Promise<YtDlpMediaSource> => {
+  const cacheKey = mediaCacheKey(videoIdOrUrl);
+  const cached = mediaSourceCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.source;
+  }
+
   try {
     const {stdout} = await execa(getExecutable(), [
       '--dump-single-json',
@@ -253,12 +267,13 @@ export const getYouTubeMediaSource = async (videoIdOrUrl: string): Promise<YtDlp
       '--skip-download',
       '--no-warnings',
       '--no-cache-dir',
+      // Prefer Opus/WebM so ffmpeg does less work and Discord playback stays smoother.
       '-f',
-      'bestaudio/best',
+      'bestaudio[acodec=opus]/bestaudio[ext=webm]/bestaudio/best',
       '-S',
-      'proto:https',
+      'proto:https,+size',
       '--extractor-args',
-      'youtube:player_client=android_vr,default,-ios',
+      'youtube:player_client=android,web',
       toYouTubeWatchUrl(videoIdOrUrl),
     ], {
       timeout: YT_DLP_EXTRACT_TIMEOUT_MS,
@@ -271,12 +286,21 @@ export const getYouTubeMediaSource = async (videoIdOrUrl: string): Promise<YtDlp
       throw new Error('yt-dlp did not return a playable media URL.');
     }
 
-    return {
+    const source: YtDlpMediaSource = {
       url: download.url,
       headers: normalizeHeaders(download.http_headers ?? response.http_headers),
       isLive: Boolean(response.is_live ?? (response.live_status === 'is_live')),
     };
+
+    mediaSourceCache.set(cacheKey, {
+      source,
+      expiresAt: Date.now() + MEDIA_SOURCE_TTL_MS,
+    });
+
+    return source;
   } catch (error: unknown) {
+    mediaSourceCache.delete(cacheKey);
+
     if (isExecaError(error)) {
       const detail = error.stderr?.trim() ?? error.shortMessage ?? 'Unknown yt-dlp error';
       throw new Error(`yt-dlp failed to extract media: ${detail}`);
@@ -288,4 +312,11 @@ export const getYouTubeMediaSource = async (videoIdOrUrl: string): Promise<YtDlp
 
     throw error;
   }
+};
+
+/** Warm the media-source cache for the next track so skips feel instant. */
+export const prefetchYouTubeMediaSource = (videoIdOrUrl: string): void => {
+  void getYouTubeMediaSource(videoIdOrUrl).catch(() => {
+    // Prefetch failures are non-fatal; play() will extract again if needed.
+  });
 };
