@@ -578,13 +578,7 @@ export default class {
 
       // Low-latency network input options for YouTube CDN streams
       ffmpegInputOptions.push(
-        '-reconnect', '1',
-        '-reconnect_streamed', '1',
-        '-reconnect_delay_max', '5',
-        '-fflags', '+discardcorrupt+nobuffer',
-        '-flags', 'low_delay',
-        '-probesize', '32768',
-        '-analyzeduration', '0',
+        '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5', '-fflags', '+discardcorrupt+nobuffer', '-flags', 'low_delay', '-probesize', '32768', '-analyzeduration', '0',
       );
 
       const headerOptions = this.buildFfmpegHeaderOptions(mediaSource.headers);
@@ -807,7 +801,7 @@ export default class {
       }
 
       // Larger buffer reduces underruns / stutter under CPU or network spikes
-      const returnedStream = capacitor.createReadStream({highWaterMark: 1 << 20});
+      const returnedStream = capacitor.createReadStream({highWaterMark: 1_048_576});
       let hasReturnedStreamClosed = false;
 
       // Never use -re for file/cache playback — it forces real-time read and causes lag.
@@ -823,11 +817,16 @@ export default class {
         .audioBitrate('96k')
         .outputOptions([
           // Faster encode = less CPU lag while still sounding fine for Discord
-          '-vbr', 'on',
-          '-compression_level', '5',
-          '-application', 'audio',
-          '-frame_duration', '20',
-          '-threads', '2',
+          '-vbr',
+          'on',
+          '-compression_level',
+          '5',
+          '-application',
+          'audio',
+          '-frame_duration',
+          '20',
+          '-threads',
+          '2',
         ])
         .outputFormat('webm')
         .on('error', error => {
