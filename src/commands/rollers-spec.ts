@@ -16,6 +16,7 @@ import {injectable} from 'inversify';
 import Command from './index.js';
 import {getBotOwnerId, requireGuildAdministrator} from '../utils/require-guild-admin.js';
 import {taglineFile} from '../lib/droid-spec/assets.js';
+import {refreshLivePrices} from '../lib/droid-spec/menu.js';
 import {quoteSpec} from '../lib/droid-spec/quote.js';
 import {isImageMessage, photoAttachments, storeChannelPhoto} from '../lib/droid-spec/photos.js';
 import {
@@ -125,6 +126,7 @@ export default class implements Command {
     }
 
     resetSpec(interaction.channel.id);
+    await refreshLivePrices();
     await interaction.reply({
       embeds: [startEmbed()],
       components: startRows(),
@@ -148,6 +150,7 @@ export default class implements Command {
       return;
     }
 
+    await refreshLivePrices();
     const value = interaction.values[0] ?? '';
     const id = interaction.customId;
 
@@ -184,6 +187,8 @@ export default class implements Command {
       syncBbSlots(spec);
     } else if (id === 'droidspec:bbplace') {
       applyBbPick(spec, value);
+    } else if (id === 'droidspec:extras') {
+      spec.extras = [...interaction.values];
     }
 
     await showWizard(interaction, spec);
@@ -196,6 +201,7 @@ export default class implements Command {
     }
 
     const spec = getSpec(interaction.channelId);
+    await refreshLivePrices();
 
     if (interaction.customId === 'droidspec:start') {
       if (spec.ownerId && spec.ownerId !== interaction.user.id) {
@@ -207,6 +213,7 @@ export default class implements Command {
       }
 
       spec.ownerId = interaction.user.id;
+      await refreshLivePrices();
       spec.page = spec.page || 'core';
       await interaction.reply({
         ...wizardPayload(spec),

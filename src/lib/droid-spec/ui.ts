@@ -7,14 +7,14 @@ import {
   StringSelectMenuOptionBuilder,
 } from 'discord.js';
 import {BANNER_NAME, PLACEMENT_NAME, TAGLINE_NAME, bannerFile, placementFile} from './assets.js';
+import {livePrices} from './menu.js';
 import {
   bbStyleAmount,
+  gbp,
   inBaseLabel,
   plusLabel,
   priced,
   quoteSpec,
-  QUOTE_ADDONS,
-  QUOTE_BASE_GBP,
   QUOTE_DISCLAIMER,
 } from './quote.js';
 import {
@@ -93,9 +93,11 @@ export function startEmbed(): EmbedBuilder {
     .setTitle('Droid Rollers')
     .setDescription(
       [
-        `Custom 8K build spec. From £${QUOTE_BASE_GBP}.`,
+        `Custom 8K build spec. From ${gbp(livePrices().base)}.`,
         'Tap **Start build spec**. Only you will see the form until you submit.',
         'The total at the end is an estimate. Andrew confirms it when he is active.',
+        'UK tracked postage is included.',
+        'Shoulder buttons (L1 / R1) are not on this form. Ask Andrew if you want a set.',
       ].join('\n'),
     )
     .setImage(`attachment://${BANNER_NAME}`)
@@ -146,10 +148,17 @@ export function wizardEmbed(spec: DroidSpec): EmbedBuilder {
     embed.setImage(`attachment://${PLACEMENT_NAME}`);
   }
 
+  if (spec.page === 'core') {
+    embed.addFields({
+      name: 'Shoulder buttons (L1 / R1)',
+      value: 'Not on this form. Low demand, but Andrew can still supply a set. Ask him after you submit.',
+    });
+  }
+
   if (spec.page === 'look' && isGhost(spec)) {
     embed.addFields({
       name: 'Ghost caps',
-      value: 'Stock / OEM caps only. Leadjoy Magic n2 does not fit the Ghost analog well. Magic n1 and n2 are taken off the list.',
+      value: 'Stock / OEM caps only. Leadjoy Magic n1 and n2 do not fit the Ghost analog well. Both are taken off the list.',
     });
   }
 
@@ -253,16 +262,16 @@ function coreRows(spec: DroidSpec): any[] {
     ], spec.sticks),
     selectRow(`${SPEC_PREFIX}caps`, spec.caps || (isGhost(spec) ? 'Stock caps only (Ghost)' : 'Stick caps'),
       isGhost(spec)
-        ? [{label: priced('OEM (stock)', inBaseLabel()), value: 'OEM', description: 'Ghost: Magic n2 does not fit'}]
+        ? [{label: priced('OEM (stock)', inBaseLabel()), value: 'OEM', description: 'Ghost: Magic n1 and n2 do not fit'}]
         : [
           {label: priced('OEM', inBaseLabel()), value: 'OEM'},
-          {label: priced('DSE style', plusLabel(QUOTE_ADDONS.dseCaps)), value: 'DSE style'},
-          {label: priced('Leadjoy Magic n1', plusLabel(QUOTE_ADDONS.leadjoyCaps)), value: 'Leadjoy Magic n1'},
-          {label: priced('Leadjoy Magic n2', plusLabel(QUOTE_ADDONS.leadjoyCaps)), value: 'Leadjoy Magic n2', description: 'Does not fit ExtremeRate Ghost'},
+          {label: priced('DSE style', plusLabel(livePrices().addons.dseCaps)), value: 'DSE style'},
+          {label: priced('Leadjoy Magic n1', plusLabel(livePrices().addons.leadjoyCaps)), value: 'Leadjoy Magic n1'},
+          {label: priced('Leadjoy Magic n2', plusLabel(livePrices().addons.leadjoyCaps)), value: 'Leadjoy Magic n2', description: 'n1 and n2 do not fit ExtremeRate Ghost'},
         ], spec.caps),
     selectRow(`${SPEC_PREFIX}faces`, spec.faces || 'Face buttons', [
       {label: priced('Droid Rollers Standard', inBaseLabel()), value: FACE_DROID_ROLLERS_STANDARD, description: 'Resin. Use this for mouse click on faces.'},
-      {label: priced('Xbox style', '£0'), value: FACE_XBOX_MEMBRANE, description: 'Membrane only'},
+      {label: priced('Xbox style', plusLabel(livePrices().addons.xboxFaces)), value: FACE_XBOX_MEMBRANE, description: `Membrane only. ${plusLabel(livePrices().addons.xboxFaces)}`},
       {label: priced('Stock', '£0'), value: FACE_STOCK_MEMBRANE, description: 'Membrane only'},
       {label: priced('Stock white', '£0'), value: FACE_STOCK_WHITE_MEMBRANE, description: 'Membrane only'},
     ], spec.faces),
@@ -273,22 +282,42 @@ function coreRows(spec: DroidSpec): any[] {
 function lookRows(spec: DroidSpec): any[] {
   return [
     selectRow(`${SPEC_PREFIX}shell`, spec.shell || 'Shell', [
-      {label: priced('Soft Touch Shell', plusLabel(QUOTE_ADDONS.softTouchShell)), value: 'Soft Touch Shell', description: 'Type the colour, then add a shell photo'},
-      {label: priced('BO5 / themed', plusLabel(QUOTE_ADDONS.bo5Shell)), value: 'BO5 / themed', description: 'Add a photo of the shell'},
-      {label: priced('ExtremeRate Ghost', plusLabel(QUOTE_ADDONS.ghostShell)), value: 'ExtremeRate Ghost', description: 'Stock caps only. Magic n2 does not fit'},
+      {label: priced('Soft Touch Shell', plusLabel(livePrices().addons.softTouchShell)), value: 'Soft Touch Shell', description: 'Type the colour, then add a shell photo'},
+      {label: priced('BO5 / themed', plusLabel(livePrices().addons.bo5Shell)), value: 'BO5 / themed', description: 'Add a photo of the shell'},
+      {label: priced('ExtremeRate Ghost', plusLabel(livePrices().addons.ghostShell)), value: 'ExtremeRate Ghost', description: 'Stock caps only. Magic n1 and n2 do not fit'},
     ], spec.shell),
     selectRow(`${SPEC_PREFIX}backs`, spec.backs || 'Back buttons', [
       {label: priced('None', '£0'), value: 'None'},
-      {label: priced('DSE paddles (2)', plusLabel(QUOTE_ADDONS.dsePaddles)), value: 'DSE paddles (2)'},
-      {label: priced('Battle Beaver style', plusLabel(QUOTE_ADDONS.bbStyleBacks)), value: BACKS_BB, description: '£25 for 1 or 2 buttons, then +£6 each extra'},
+      {label: priced('DSE paddles (2)', plusLabel(livePrices().addons.dsePaddles)), value: 'DSE paddles (2)'},
+      {label: priced('Battle Beaver style', plusLabel(livePrices().addons.bbStyleBacks)), value: BACKS_BB, description: `${gbp(livePrices().addons.bbStyleBacks)} for 1 or 2 buttons, then ${plusLabel(livePrices().addons.bbExtraButton)} each extra`},
     ], spec.backs),
     selectRow(`${SPEC_PREFIX}click`, spec.click || 'Click', [
       {label: priced('None', '£0'), value: 'None'},
-      {label: priced('Triggers + bumpers', plusLabel(QUOTE_ADDONS.mouseClickTriggers)), value: 'Triggers + bumpers only (L1/R1 + L2/R2)'},
-      {label: priced('Faces + triggers', plusLabel(QUOTE_ADDONS.mouseClickFacesAndTriggers)), value: CLICK_FACES, description: 'Needs Droid Rollers Standard resin faces'},
+      {label: priced('Triggers + bumpers', plusLabel(livePrices().addons.mouseClickTriggers)), value: 'Triggers + bumpers only (L1/R1 + L2/R2)'},
+      {label: priced('Faces + triggers', plusLabel(livePrices().addons.mouseClickFacesAndTriggers)), value: CLICK_FACES, description: 'Needs Droid Rollers Standard resin faces'},
     ], spec.click),
+    ...extrasRows(spec),
     navRow(spec),
   ];
+}
+
+function extrasRows(spec: DroidSpec): any[] {
+  const extras = livePrices().extras.slice(0, 25);
+  if (extras.length === 0) return [];
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(`${SPEC_PREFIX}extras`)
+    .setPlaceholder('Optional extras')
+    .setMinValues(0)
+    .setMaxValues(Math.min(extras.length, 25));
+  for (const extra of extras) {
+    menu.addOptions(
+      new StringSelectMenuOptionBuilder()
+        .setLabel(`${extra.label} · ${plusLabel(extra.priceGbp)}`.slice(0, 100))
+        .setValue(extra.id)
+        .setDefault(spec.extras.includes(extra.id)),
+    );
+  }
+  return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu)];
 }
 
 const HEIGHTS = ['High', 'Medium', 'Standard', "Buster's", 'Low', 'Lower'] as const;
@@ -422,7 +451,13 @@ export function submittedEmbed(spec: DroidSpec): EmbedBuilder {
     .setColor(BRAND_BLUE)
     .setTitle('Droid Rollers · custom build')
     .setDescription(specText(spec))
-    .addFields({name: 'Estimate', value: quote.embedField})
+    .addFields(
+      {name: 'Estimate', value: quote.embedField},
+      {
+        name: 'Shoulder buttons (L1 / R1)',
+        value: 'Not on this form. If you want a set, ask Andrew. He will add them to the confirmed total.',
+      },
+    )
     .setImage(`attachment://${TAGLINE_NAME}`)
     .setFooter({text: QUOTE_DISCLAIMER});
 }
