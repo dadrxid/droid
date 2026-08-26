@@ -25,7 +25,10 @@ import {
   applyBbPick,
   getSpec,
   isBb,
+  isGhost,
+  isLeadjoyCap,
   isSoftTouch,
+  lockGhostCaps,
   resetSpec,
   syncBbSlots,
   type DroidSpec,
@@ -153,11 +156,16 @@ export default class implements Command {
       spec.sticks = value;
     } else if (id === 'droidspec:caps') {
       spec.caps = value;
+      if (isGhost(spec) && isLeadjoyCap(spec.caps)) {
+        spec.caps = 'OEM';
+      }
     } else if (id === 'droidspec:shell') {
       spec.shell = value;
       if (value !== SHELL_SOFT_TOUCH) {
         spec.shellNote = '';
       }
+
+      lockGhostCaps(spec);
     } else if (id === 'droidspec:faces') {
       spec.faces = value;
     } else if (id === 'droidspec:backs') {

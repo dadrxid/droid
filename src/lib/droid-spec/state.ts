@@ -38,6 +38,8 @@ export const FACE_STOCK_WHITE_MEMBRANE = 'Stock white (membrane only)';
 export const CLICK_FACES = 'Faces + triggers (Droid Rollers Standard)';
 export const BACKS_BB = 'Battle Beaver style';
 export const SHELL_SOFT_TOUCH = 'Soft Touch Shell';
+export const SHELL_GHOST = 'ExtremeRate Ghost';
+export const CAPS_OEM = 'OEM';
 
 export function emptySpec(): DroidSpec {
   return {
@@ -83,6 +85,21 @@ export function isBb(spec: DroidSpec): boolean {
 
 export function isSoftTouch(spec: DroidSpec): boolean {
   return spec.shell === SHELL_SOFT_TOUCH;
+}
+
+export function isGhost(spec: DroidSpec): boolean {
+  return spec.shell === SHELL_GHOST;
+}
+
+export function isLeadjoyCap(caps: string): boolean {
+  return caps.startsWith('Leadjoy Magic');
+}
+
+/** Ghost analog well: Leadjoy Magic n2 does not fit. Stock caps only. */
+export function lockGhostCaps(spec: DroidSpec): void {
+  if (isGhost(spec) && isLeadjoyCap(spec.caps)) {
+    spec.caps = CAPS_OEM;
+  }
 }
 
 export function hasPhoto(spec: DroidSpec, kind: PhotoKind): boolean {

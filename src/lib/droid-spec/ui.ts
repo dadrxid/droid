@@ -19,7 +19,9 @@ import {
   type SpecPage,
   hasPhoto,
   isBb,
+  isGhost,
   isSoftTouch,
+  lockGhostCaps,
   specText,
 } from './state.js';
 
@@ -120,6 +122,13 @@ export function wizardEmbed(spec: DroidSpec): EmbedBuilder {
     embed.setImage(`attachment://${PLACEMENT_NAME}`);
   }
 
+  if (spec.page === 'look' && isGhost(spec)) {
+    embed.addFields({
+      name: 'Ghost caps',
+      value: 'Stock / OEM caps only. Leadjoy Magic n2 does not fit the Ghost analog well. Magic n1 and n2 are taken off the list.',
+    });
+  }
+
   if (spec.page === 'look' && isSoftTouch(spec)) {
     embed.addFields({
       name: 'Soft Touch colour',
@@ -208,6 +217,7 @@ function navRow(spec: DroidSpec): ActionRowBuilder<ButtonBuilder> {
 }
 
 function coreRows(spec: DroidSpec): any[] {
+  lockGhostCaps(spec);
   return [
     selectRow(`${SPEC_PREFIX}board`, spec.board || 'Board', [
       {label: 'SuiOvOi', value: 'SuiOvOi'},
@@ -217,12 +227,15 @@ function coreRows(spec: DroidSpec): any[] {
       {label: 'Ginfull RS13', value: 'Ginfull RS13'},
       {label: 'K-Silver JS13 Pro+', value: 'K-Silver JS13 Pro+'},
     ], spec.sticks),
-    selectRow(`${SPEC_PREFIX}caps`, spec.caps || 'Stick caps', [
-      {label: 'OEM', value: 'OEM'},
-      {label: 'DSE style', value: 'DSE style'},
-      {label: 'Leadjoy Magic n1', value: 'Leadjoy Magic n1'},
-      {label: 'Leadjoy Magic n2', value: 'Leadjoy Magic n2'},
-    ], spec.caps),
+    selectRow(`${SPEC_PREFIX}caps`, spec.caps || (isGhost(spec) ? 'Stock caps only (Ghost)' : 'Stick caps'),
+      isGhost(spec)
+        ? [{label: 'OEM (stock)', value: 'OEM', description: 'Ghost: Magic n2 does not fit'}]
+        : [
+          {label: 'OEM', value: 'OEM'},
+          {label: 'DSE style', value: 'DSE style'},
+          {label: 'Leadjoy Magic n1', value: 'Leadjoy Magic n1'},
+          {label: 'Leadjoy Magic n2', value: 'Leadjoy Magic n2', description: 'Does not fit ExtremeRate Ghost'},
+        ], spec.caps),
     selectRow(`${SPEC_PREFIX}faces`, spec.faces || 'Face buttons', [
       {label: 'Droid Rollers Standard', value: FACE_DROID_ROLLERS_STANDARD, description: 'Resin. Use this for mouse click on faces.'},
       {label: 'Xbox style', value: FACE_XBOX_MEMBRANE, description: 'Membrane only'},
@@ -238,7 +251,7 @@ function lookRows(spec: DroidSpec): any[] {
     selectRow(`${SPEC_PREFIX}shell`, spec.shell || 'Shell', [
       {label: 'Soft Touch Shell', value: 'Soft Touch Shell', description: 'Type the colour, then add a shell photo'},
       {label: 'BO5 / themed', value: 'BO5 / themed', description: 'Add a photo of the shell'},
-      {label: 'ExtremeRate Ghost', value: 'ExtremeRate Ghost', description: 'Add a photo of the shell'},
+      {label: 'ExtremeRate Ghost', value: 'ExtremeRate Ghost', description: 'Stock caps only. Magic n2 does not fit'},
     ], spec.shell),
     selectRow(`${SPEC_PREFIX}backs`, spec.backs || 'Back buttons', [
       {label: 'None', value: 'None'},
