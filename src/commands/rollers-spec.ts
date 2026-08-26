@@ -20,17 +20,20 @@ import {isImageMessage, photoAttachments, storeChannelPhoto} from '../lib/droid-
 import {
   CLICK_FACES,
   FACE_DROID_ROLLERS_STANDARD,
+  SHELL_SOFT_TOUCH,
   type PhotoKind,
   applyBbPick,
   getSpec,
   isBb,
+  isSoftTouch,
   resetSpec,
   syncBbSlots,
   type DroidSpec,
 } from '../lib/droid-spec/state.js';
 import {
   nextPage,
-  photoKindRow,
+  photoWaitEmbed,
+  photoWaitRows,
   prevPage,
   startEmbed,
   startFiles,
@@ -44,7 +47,11 @@ import {
 const PHOTO_WAIT_MS = 60_000;
 const MAX_PHOTOS = 5;
 
-type PhotoWait = {kind: PhotoKind; interaction: StringSelectMenuInteraction};
+type PhotoWait = {
+  kind: PhotoKind;
+  interaction: ButtonInteraction;
+  collector: {stop: (reason?: string) => void};
+};
 const photoWait = new Map<string, PhotoWait>();
 
 function waitKey(channelId: string, userId: string): string {
@@ -94,7 +101,11 @@ export default class implements Command {
     'droidspec:next',
     'droidspec:back',
     'droidspec:bbprev',
-    'droidspec:photo',
+    'droidspec:photo-shell',
+    'droidspec:photo-faces',
+    'droidspec:photo-backs',
+    'droidspec:photo-other',
+    'droidspec:photocancel',
     'droidspec:shellnote',
     'droidspec:submit',
   ];
@@ -125,7 +136,6 @@ export default class implements Command {
     }
 
     if (interaction.customId === 'droidspec:photokind') {
-      await this.startPhotoWait(interaction, (interaction.values[0] ?? 'other') as PhotoKind);
       return;
     }
 
@@ -145,6 +155,9 @@ export default class implements Command {
       spec.caps = value;
     } else if (id === 'droidspec:shell') {
       spec.shell = value;
+      if (value !== SHELL_SOFT_TOUCH) {
+        spec.shellNote = '';
+      }
     } else if (id === 'droidspec:faces') {
       spec.faces = value;
     } else if (id === 'droidspec:backs') {
@@ -219,21 +232,36 @@ export default class implements Command {
       return;
     }
 
-    if (interaction.customId === 'droidspec:photo') {
+    if (interaction.customId === 'droidspec:photocancel') {
+      const wait = photoWait.get(waitKey(interaction.channelId, interaction.user.id));
+      wait?.collector.stop('cancel');
+      await showWizard(interaction, spec);
+      return;
+    }
+
+    if (interaction.customId.startsWith('droidspec:photo-')) {
+      const kind = interaction.customId.slice('droidspec:photo-'.length) as PhotoKind;
+      if (!['shell', 'faces', 'backs', 'other'].includes(kind)) {
+        return;
+      }
+
       if (spec.photos.length >= MAX_PHOTOS) {
         await interaction.reply({content: `Max ${String(MAX_PHOTOS)} photos.`, ephemeral: true});
         return;
       }
 
-      await interaction.reply({
-        content: 'What is this photo of? After you pick, paste or drag it here. The bot takes it and deletes it from the ticket.',
-        components: [photoKindRow()],
-        ephemeral: true,
-      });
+      await this.startPhotoWait(interaction, kind);
       return;
     }
 
     if (interaction.customId === 'droidspec:shellnote') {
+      if (!isSoftTouch(spec)) {
+        await interaction.reply({
+          content: 'Shell colour is only for Soft Touch. BO5 and Ghost need a shell photo instead.',
+          ephemeral: true,
+        });
+        return;
+      }
       const modal = new ModalBuilder()
         .setCustomId('droidspec:modalshell')
         .setTitle('Shell colour')
@@ -259,13 +287,13 @@ export default class implements Command {
         new EmbedBuilder().setColor(0x0088ff).setTitle(`Photo · ${photo.kind}`).setImage(`attachment://${photo.name}`),
       );
       await interaction.update({
-        content: 'Submitted. The spec is now in the ticket.',
+        content: 'Submitted. The custom build is now in the ticket.',
         embeds: [],
         components: [],
         attachments: [],
       });
       await interaction.followUp({
-        content: `<@${ownerId}> spec is in.\nAndrew will quote, then send a checkout link when the listing is ready.`,
+        content: `<@${ownerId}> custom build is in.\nAndrew will quote, then send a checkout link when the listing is ready.`,
         embeds: [submittedEmbed(spec), ...photoEmbeds],
         files,
         allowedMentions: {users: [ownerId]},
@@ -285,13 +313,18 @@ export default class implements Command {
     }
 
     spec.shellNote = interaction.fields.getTextInputValue('note').trim();
+    if (!isSoftTouch(spec)) {
+      spec.shellNote = '';
+      await interaction.reply({content: 'Shell colour is only for Soft Touch.', ephemeral: true});
+      return;
+    }
     await interaction.reply({
       content: spec.shellNote ? `Shell colour saved: ${spec.shellNote}` : 'Shell colour cleared.',
       ephemeral: true,
     });
   }
 
-  private async startPhotoWait(interaction: StringSelectMenuInteraction, kind: PhotoKind): Promise<void> {
+  private async startPhotoWait(interaction: ButtonInteraction, kind: PhotoKind): Promise<void> {
     const channel = interaction.channel;
     if (!channel || !interaction.channelId || !('createMessageCollector' in channel)) {
       await interaction.update({content: 'Cannot collect photos here.', components: []});
@@ -299,15 +332,12 @@ export default class implements Command {
     }
 
     const spec = getSpec(interaction.channelId);
-    if (!guardOwner(interaction, spec)) {
-      return;
-    }
-
     const key = waitKey(interaction.channelId, interaction.user.id);
-    photoWait.set(key, {kind, interaction});
     await interaction.update({
-      content: `Paste or drag a **${kind}** photo in this ticket now (60 seconds). The bot will store it and delete it from the chat.`,
-      components: [],
+      content: '',
+      embeds: [photoWaitEmbed(kind)],
+      components: photoWaitRows(),
+      attachments: [],
     });
 
     const collector = channel.createMessageCollector({
@@ -316,6 +346,7 @@ export default class implements Command {
       max: 1,
       time: PHOTO_WAIT_MS,
     });
+    photoWait.set(key, {kind, interaction, collector});
 
     collector.on('collect', message => {
       void (async () => {
@@ -327,26 +358,29 @@ export default class implements Command {
         const stored = await storeChannelPhoto(interaction.channelId, kind, message);
         photoWait.delete(key);
         if (!stored) {
+          await interaction.editReply(wizardPayload(spec) as never).catch(() => undefined);
           await interaction.followUp({
-            content: 'Could not save that photo. Try a smaller image.',
+            content: 'Could not save that photo. Try a smaller image, then tap Add again.',
             ephemeral: true,
           }).catch(() => undefined);
           return;
         }
 
         spec.photos.push(stored);
-        await interaction.followUp({
-          content: `Saved **${kind}** photo. It is off the ticket until you submit.`,
-          ephemeral: true,
-        }).catch(() => undefined);
+        await interaction.editReply(wizardPayload(spec) as never).catch(() => undefined);
       })();
     });
 
-    collector.on('end', collected => {
+    collector.on('end', (collected, reason) => {
       photoWait.delete(key);
+      if (reason === 'cancel' || reason === 'limit') {
+        return;
+      }
+
       if (collected.size === 0) {
+        void interaction.editReply(wizardPayload(spec) as never).catch(() => undefined);
         void interaction.followUp({
-          content: 'No photo received in 60 seconds. Use **Add photo** again.',
+          content: 'No photo in 60 seconds. Tap **Add shell photo** (or faces / backs / other) and paste it into the ticket.',
           ephemeral: true,
         }).catch(() => undefined);
       }

@@ -15,8 +15,11 @@ import {
   FACE_STOCK_WHITE_MEMBRANE,
   FACE_XBOX_MEMBRANE,
   type DroidSpec,
+  type PhotoKind,
   type SpecPage,
+  hasPhoto,
   isBb,
+  isSoftTouch,
   specText,
 } from './state.js';
 
@@ -69,7 +72,7 @@ function stepMeta(spec: DroidSpec): {step: number; total: number; title: string}
     return {step: 3, total, title: 'Battle Beaver placements'};
   }
 
-  return {step: total, total, title: 'Photos and submit'};
+  return {step: total, total, title: 'Add photos. Paste them into this ticket.'};
 }
 
 export function startEmbed(): EmbedBuilder {
@@ -117,8 +120,32 @@ export function wizardEmbed(spec: DroidSpec): EmbedBuilder {
     embed.setImage(`attachment://${PLACEMENT_NAME}`);
   }
 
+  if (spec.page === 'look' && isSoftTouch(spec)) {
+    embed.addFields({
+      name: 'Soft Touch colour',
+      value: spec.shellNote
+        ? `Colour: ${spec.shellNote}. Add a shell photo on the next photo step.`
+        : 'Tap **Shell colour**, then add a **shell photo** on the photo step.',
+    });
+  }
+
   if (spec.page === 'photos') {
-    embed.setFooter({text: 'Paste or drag a photo after Add photo. It is pulled from the ticket so the chat stays clean.'});
+    const shellDone = hasPhoto(spec, 'shell') ? 'saved' : 'needed';
+    const facesDone = hasPhoto(spec, 'faces') ? 'saved' : 'optional';
+    const backsDone = hasPhoto(spec, 'backs') ? 'saved' : (isBb(spec) ? 'needed' : 'optional');
+    embed.addFields({
+      name: 'How to add a photo',
+      value: [
+        '1. Tap **Add shell photo** (or faces / backs / other).',
+        '2. **Paste or drag the image into this ticket.** Not a link.',
+        '3. The bot copies it and deletes it from chat.',
+        '',
+        `Shell photo: **${shellDone}**`,
+        `Faces photo: **${facesDone}**`,
+        `Backs photo: **${backsDone}**`,
+      ].join('\n'),
+    });
+    embed.setFooter({text: 'The ticket stays clean. Photos only show on the submitted custom build.'});
   } else if (spec.page !== 'bb') {
     embed.setFooter({text: 'Private until you submit. Andrew quotes, then sends a website checkout link.'});
   }
@@ -144,17 +171,22 @@ function navRow(spec: DroidSpec): ActionRowBuilder<ButtonBuilder> {
   if (spec.page === 'photos') {
     return new ActionRowBuilder<ButtonBuilder>().addComponents(
       back,
-      new ButtonBuilder().setCustomId(`${SPEC_PREFIX}photo`).setLabel('Add photo').setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId(`${SPEC_PREFIX}submit`).setLabel('Submit spec').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(`${SPEC_PREFIX}submit`).setLabel('Submit custom build').setStyle(ButtonStyle.Success),
     );
   }
 
   if (spec.page === 'look') {
-    return new ActionRowBuilder<ButtonBuilder>().addComponents(
-      back,
-      new ButtonBuilder().setCustomId(`${SPEC_PREFIX}shellnote`).setLabel('Shell colour').setStyle(ButtonStyle.Secondary),
+    const buttons = [back];
+    if (isSoftTouch(spec)) {
+      buttons.push(
+        new ButtonBuilder().setCustomId(`${SPEC_PREFIX}shellnote`).setLabel('Shell colour').setStyle(ButtonStyle.Secondary),
+      );
+    }
+
+    buttons.push(
       new ButtonBuilder().setCustomId(`${SPEC_PREFIX}next`).setLabel('Next').setStyle(ButtonStyle.Primary),
     );
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(...buttons);
   }
 
   if (spec.page === 'bb') {
@@ -204,9 +236,9 @@ function coreRows(spec: DroidSpec): any[] {
 function lookRows(spec: DroidSpec): any[] {
   return [
     selectRow(`${SPEC_PREFIX}shell`, spec.shell || 'Shell', [
-      {label: 'Soft Touch Shell', value: 'Soft Touch Shell'},
-      {label: 'BO5 / themed', value: 'BO5 / themed'},
-      {label: 'ExtremeRate Ghost', value: 'ExtremeRate Ghost'},
+      {label: 'Soft Touch Shell', value: 'Soft Touch Shell', description: 'Type the colour, then add a shell photo'},
+      {label: 'BO5 / themed', value: 'BO5 / themed', description: 'Add a photo of the shell'},
+      {label: 'ExtremeRate Ghost', value: 'ExtremeRate Ghost', description: 'Add a photo of the shell'},
     ], spec.shell),
     selectRow(`${SPEC_PREFIX}backs`, spec.backs || 'Back buttons', [
       {label: 'None', value: 'None'},
@@ -261,7 +293,18 @@ function bbRows(spec: DroidSpec): any[] {
 }
 
 function photoRows(spec: DroidSpec): any[] {
-  return [navRow(spec)];
+  const saved = (kind: PhotoKind, label: string) =>
+    hasPhoto(spec, kind) ? `${label} (saved)` : label;
+
+  return [
+    new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId(`${SPEC_PREFIX}photo-shell`).setLabel(saved('shell', 'Add shell photo')).setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`${SPEC_PREFIX}photo-faces`).setLabel(saved('faces', 'Add faces photo')).setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`${SPEC_PREFIX}photo-backs`).setLabel(saved('backs', 'Add backs photo')).setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`${SPEC_PREFIX}photo-other`).setLabel(saved('other', 'Add other photo')).setStyle(ButtonStyle.Secondary),
+    ),
+    navRow(spec),
+  ];
 }
 
 export function wizardRows(spec: DroidSpec): any[] {
@@ -278,6 +321,29 @@ export function wizardRows(spec: DroidSpec): any[] {
   }
 
   return coreRows(spec);
+}
+
+export function photoWaitEmbed(kind: PhotoKind): EmbedBuilder {
+  const label = kind === 'shell' ? 'SHELL' : kind.toUpperCase();
+  return new EmbedBuilder()
+    .setColor(BRAND_BLUE)
+    .setTitle(`Paste your ${label} photo now`)
+    .setDescription(
+      [
+        `**Paste or drag the ${kind} photo into this ticket.**`,
+        'Do it in the ticket chat, not here.',
+        'You have **60 seconds**.',
+        'The bot copies it, then deletes it from the ticket.',
+      ].join('\n'),
+    );
+}
+
+export function photoWaitRows(): any[] {
+  return [
+    new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId(`${SPEC_PREFIX}photocancel`).setLabel('Cancel').setStyle(ButtonStyle.Secondary),
+    ),
+  ];
 }
 
 export function photoKindRow(): any {
@@ -320,7 +386,7 @@ export function prevPage(spec: DroidSpec): SpecPage {
 export function submittedEmbed(spec: DroidSpec): EmbedBuilder {
   return new EmbedBuilder()
     .setColor(BRAND_BLUE)
-    .setTitle('Droid Rollers · spec in')
+    .setTitle('Droid Rollers · custom build')
     .setDescription(specText(spec))
     .setImage(`attachment://${BANNER_NAME}`)
     .setFooter({text: 'Andrew will quote, then send a website checkout link.'});

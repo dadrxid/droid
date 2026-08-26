@@ -37,6 +37,7 @@ export const FACE_STOCK_MEMBRANE = 'Stock (membrane only)';
 export const FACE_STOCK_WHITE_MEMBRANE = 'Stock white (membrane only)';
 export const CLICK_FACES = 'Faces + triggers (Droid Rollers Standard)';
 export const BACKS_BB = 'Battle Beaver style';
+export const SHELL_SOFT_TOUCH = 'Soft Touch Shell';
 
 export function emptySpec(): DroidSpec {
   return {
@@ -78,6 +79,14 @@ export function resetSpec(channelId: string): DroidSpec {
 
 export function isBb(spec: DroidSpec): boolean {
   return spec.backs === BACKS_BB;
+}
+
+export function isSoftTouch(spec: DroidSpec): boolean {
+  return spec.shell === SHELL_SOFT_TOUCH;
+}
+
+export function hasPhoto(spec: DroidSpec, kind: PhotoKind): boolean {
+  return spec.photos.some(photo => photo.kind === kind);
 }
 
 export function syncBbSlots(spec: DroidSpec): void {
@@ -154,7 +163,7 @@ export function specText(spec: DroidSpec): string {
     `**Board:** ${spec.board || 'not set'}`,
     `**Sticks:** ${spec.sticks || 'not set'}`,
     `**Caps:** ${spec.caps || 'not set'}`,
-    `**Shell:** ${spec.shell || 'not set'}${spec.shellNote ? ` (${spec.shellNote})` : ''}`,
+    `**Shell:** ${spec.shell || 'not set'}${isSoftTouch(spec) && spec.shellNote ? ` (${spec.shellNote})` : ''}`,
     `**Faces:** ${spec.faces || 'not set'}`,
     `**Backs:** ${spec.backs || 'not set'}`,
   ];
