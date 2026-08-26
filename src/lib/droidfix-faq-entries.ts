@@ -235,6 +235,8 @@ Guide: https://droidfix.uk/services/xbox`,
     buildReply: ctx => `Third-party controllers are **not** accepted.
 
 We repair official PS5 DualSense, PS4 DualShock 4 (JDM-040/050/055), and Xbox Series Model 1914 only.
+
+One exception: a **custom pad built on official Sony hardware** (a Scuf or another modder's build) is fine for an **8K board swap**. UK mail-in, open a repair ticket.
 Ask in ${ask(ctx)} with a photo if unsure.`,
   },
   {
@@ -397,11 +399,13 @@ Turnaround starts when your pad **arrives**, not when you order.`,
   },
   {
     id: 'custom-build',
-    triggers: ['custom build', 'custom mod', 'custom controller', 'bespoke', 'custom order'],
-    buildReply: ctx => `Custom builds need **4 to 6 weeks** from when your order is confirmed and we receive your controller.
+    triggers: ['custom build', 'custom mod', 'custom controller', 'bespoke', 'custom order', 'board swap'],
+    buildReply: ctx => `Custom builds are **PS4 / DS4 style only** right now, on an **8K board**. We supply the pad, build it in house, then post it out, so there is **no mail-in** for a custom build.
 
+**4 to 6 weeks** from when your order is confirmed, sometimes sooner.
 No change-of-mind returns on completed custom work.
-Quote via the site or open ${ticket(ctx)} before ordering if unsure.`,
+
+Already own a custom pad and only want the 8K board fitted? That is a **board swap**, so open ${ticket(ctx)} as a **repair**. UK mail-in only.`,
   },
   {
     id: 'refurbished',

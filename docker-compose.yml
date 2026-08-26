@@ -16,8 +16,10 @@ services:
       - DISCORD_TOKEN=${DISCORD_TOKEN}
       - YOUTUBE_API_KEY=${YOUTUBE_API_KEY}
       - BOT_STATUS=${BOT_STATUS:-online}
-      - BOT_ACTIVITY_TYPE=${BOT_ACTIVITY_TYPE:-WATCHING}
-      - BOT_ACTIVITY=${BOT_ACTIVITY:-Hyperstrike DS4 · TMR · droidfix.uk}
+      # Presence is pinned here on purpose so a stale Portainer stack variable
+      # cannot put the old playlist line back. Edit these two to change it.
+      - BOT_ACTIVITY_TYPE=PLAYING
+      - BOT_ACTIVITY=Droid Rollers - droidfix.uk
       - PLAYLIST_API_URL=${PLAYLIST_API_URL:-}
       - HOMELAB_API_URL=${HOMELAB_API_URL:-}
       # Ticket system: same DROIDFIX_BOT_TOKEN as Railway, or the site copy is skipped

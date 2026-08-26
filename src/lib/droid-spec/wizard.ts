@@ -14,20 +14,17 @@ import {
 import {getBotOwnerId} from '../../utils/require-guild-admin.js';
 import {brandEmoji} from '../droid-brand.js';
 import {taglineFile} from './assets.js';
-import {refreshLivePrices} from './menu.js';
+import {hasItem, refreshLivePrices} from './menu.js';
 import {quoteSpec} from './quote.js';
 import {isImageMessage, photoAttachments, storeChannelPhoto} from './photos.js';
 import {
   CLICK_FACES,
-  FACE_DROID_ROLLERS_STANDARD,
-  SHELL_SOFT_TOUCH,
+  FACES_RESIN,
   applyBbPick,
   getSpec,
   isBb,
-  isGhost,
-  isLeadjoyCap,
-  isSoftTouch,
   lockGhostCaps,
+  needsShellColour,
   resetSpec,
   syncBbSlots,
   type DroidSpec,
@@ -93,6 +90,71 @@ function guardOwner(
   return false;
 }
 
+function applyShellPick(spec: DroidSpec): void {
+  if (!needsShellColour(spec)) {
+    spec.shellNote = '';
+  }
+
+  lockGhostCaps(spec);
+}
+
+type SelectHandler = (spec: DroidSpec, value: string, values: string[]) => void;
+
+const SELECT_HANDLERS: Record<string, SelectHandler> = {
+  'droidspec:build': (spec, value) => {
+    spec.build = value;
+  },
+  'droidspec:board': (spec, value) => {
+    spec.board = value;
+  },
+  'droidspec:sticks': (spec, value) => {
+    spec.sticks = value;
+  },
+  'droidspec:tension': (spec, value) => {
+    spec.tension = value;
+  },
+  'droidspec:caps': (spec, value) => {
+    spec.caps = value;
+    lockGhostCaps(spec);
+  },
+  'droidspec:shell': (spec, value) => {
+    spec.shell = value;
+    applyShellPick(spec);
+  },
+  'droidspec:rear': (spec, value) => {
+    spec.rear = value;
+    applyShellPick(spec);
+  },
+  'droidspec:faces': (spec, value) => {
+    spec.faces = value;
+  },
+  'droidspec:click': (spec, value) => {
+    spec.click = value;
+    if (value === CLICK_FACES && hasItem(FACES_RESIN)) {
+      spec.faces = FACES_RESIN;
+    }
+  },
+  'droidspec:backs': (spec, value) => {
+    spec.backs = value;
+    if (isBb(spec)) {
+      syncBbSlots(spec);
+    }
+  },
+  'droidspec:shoulders': (spec, value) => {
+    spec.shoulders = value;
+  },
+  'droidspec:bbcount': (spec, value) => {
+    spec.bbCount = value;
+    syncBbSlots(spec);
+  },
+  'droidspec:bbplace': (spec, value) => {
+    applyBbPick(spec, value);
+  },
+  'droidspec:extras': (spec, _value, values) => {
+    spec.extras = [...values];
+  },
+};
+
 async function showWizard(
   interaction: ButtonInteraction | StringSelectMenuInteraction,
   spec: DroidSpec,
@@ -128,44 +190,9 @@ export async function handleSpecSelect(interaction: StringSelectMenuInteraction)
   }
 
   await refreshLivePrices();
-  const value = interaction.values[0] ?? '';
-  const id = interaction.customId;
-
-  if (id === 'droidspec:board') {
-    spec.board = value;
-  } else if (id === 'droidspec:sticks') {
-    spec.sticks = value;
-  } else if (id === 'droidspec:caps') {
-    spec.caps = value;
-    if (isGhost(spec) && isLeadjoyCap(spec.caps)) {
-      spec.caps = 'OEM';
-    }
-  } else if (id === 'droidspec:shell') {
-    spec.shell = value;
-    if (value !== SHELL_SOFT_TOUCH) {
-      spec.shellNote = '';
-    }
-
-    lockGhostCaps(spec);
-  } else if (id === 'droidspec:faces') {
-    spec.faces = value;
-  } else if (id === 'droidspec:backs') {
-    spec.backs = value;
-    if (isBb(spec)) {
-      syncBbSlots(spec);
-    }
-  } else if (id === 'droidspec:click') {
-    spec.click = value;
-    if (value === CLICK_FACES) {
-      spec.faces = FACE_DROID_ROLLERS_STANDARD;
-    }
-  } else if (id === 'droidspec:bbcount') {
-    spec.bbCount = value;
-    syncBbSlots(spec);
-  } else if (id === 'droidspec:bbplace') {
-    applyBbPick(spec, value);
-  } else if (id === 'droidspec:extras') {
-    spec.extras = [...interaction.values];
+  const apply = SELECT_HANDLERS[interaction.customId];
+  if (apply) {
+    apply(spec, interaction.values[0] ?? '', interaction.values);
   }
 
   await showWizard(interaction, spec);
@@ -247,9 +274,9 @@ export async function handleSpecButton(interaction: ButtonInteraction): Promise<
   }
 
   if (interaction.customId === 'droidspec:shellnote') {
-    if (!isSoftTouch(spec)) {
+    if (!needsShellColour(spec)) {
       await interaction.reply({
-        content: 'Shell colour is only for Soft Touch. BO5 and Ghost need a shell photo instead.',
+        content: 'Shell colour is only for the premium soft touch shells. Themed shells need a photo instead.',
         ephemeral: true,
       });
       return;
@@ -307,9 +334,12 @@ export async function handleSpecModal(interaction: ModalSubmitInteraction): Prom
   }
 
   spec.shellNote = interaction.fields.getTextInputValue('note').trim();
-  if (!isSoftTouch(spec)) {
+  if (!needsShellColour(spec)) {
     spec.shellNote = '';
-    await interaction.reply({content: 'Shell colour is only for Soft Touch.', ephemeral: true});
+    await interaction.reply({
+      content: 'Shell colour is only for the premium soft touch shells.',
+      ephemeral: true,
+    });
     return;
   }
 

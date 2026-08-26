@@ -1,5 +1,7 @@
+import {defaultBoard, defaultBuild, itemLabel} from './menu.js';
+
 export type PhotoKind = 'shell' | 'faces' | 'backs' | 'other';
-export type SpecPage = 'core' | 'look' | 'bb' | 'photos';
+export type SpecPage = 'core' | 'look' | 'mods' | 'bb' | 'photos';
 export type BbSide = 'Left' | 'Right';
 
 export interface SpecPhoto {
@@ -16,14 +18,18 @@ export interface BbSlot {
 export interface DroidSpec {
   ownerId: string;
   page: SpecPage;
+  build: string;
   board: string;
   sticks: string;
   caps: string;
+  tension: string;
   shell: string;
   shellNote: string;
+  rear: string;
   faces: string;
   backs: string;
   click: string;
+  shoulders: string;
   bbCount: string;
   bbCursor: number;
   bbSlots: BbSlot[];
@@ -32,30 +38,31 @@ export interface DroidSpec {
   startMessageId: string;
 }
 
-export const FACE_DROID_ROLLERS_STANDARD = 'Droid Rollers Standard (resin PlayStation icons)';
-export const FACE_XBOX_PS = 'Xbox shape · PlayStation icons';
-export const FACE_XBOX_ABXY = 'Xbox shape · Xbox icons (ABXY)';
-export const FACE_XBOX_MEMBRANE = 'Xbox style (membrane only)';
-export const FACE_STOCK_MEMBRANE = 'Stock (membrane only)';
-export const FACE_STOCK_WHITE_MEMBRANE = 'Stock white (membrane only)';
-export const CLICK_FACES = 'Faces + triggers (Droid Rollers Standard)';
-export const BACKS_BB = 'Battle Beaver style';
-export const SHELL_SOFT_TOUCH = 'Soft Touch Shell';
-export const SHELL_GHOST = 'ExtremeRate Ghost';
-export const CAPS_OEM = 'OEM';
+export const CAPS_OEM = 'caps-oem';
+export const FACES_RESIN = 'faces-resin';
+export const CLICK_FACES = 'click-faces';
+export const BACKS_BB = 'backs-bb';
+
+/** Not price desk rows. They let the customer clear an optional group. */
+export const TENSION_NONE = 'tension-none';
+export const SHOULDERS_NONE = 'shoulders-none';
 
 export function emptySpec(): DroidSpec {
   return {
     ownerId: '',
     page: 'core',
+    build: '',
     board: '',
     sticks: '',
     caps: '',
+    tension: '',
     shell: '',
     shellNote: '',
+    rear: '',
     faces: '',
     backs: '',
     click: '',
+    shoulders: '',
     bbCount: '',
     bbCursor: 0,
     bbSlots: [],
@@ -88,19 +95,32 @@ export function resetSpec(channelId: string): DroidSpec {
 }
 
 export function isBb(spec: DroidSpec): boolean {
-  return spec.backs === BACKS_BB || spec.backs === 'backs-bb';
+  return spec.backs === BACKS_BB;
 }
 
 export function isSoftTouch(spec: DroidSpec): boolean {
-  return spec.shell === SHELL_SOFT_TOUCH || spec.shell === 'shell-soft';
+  return spec.shell === 'shell-soft';
+}
+
+export function isRearSoftTouch(spec: DroidSpec): boolean {
+  return spec.rear === 'rear-soft';
+}
+
+/** Themed shells are built to a photo, so the sheet asks for one. */
+export function isBo5(spec: DroidSpec): boolean {
+  return spec.shell === 'shell-bo5';
+}
+
+export function needsShellColour(spec: DroidSpec): boolean {
+  return isSoftTouch(spec) || isRearSoftTouch(spec);
 }
 
 export function isGhost(spec: DroidSpec): boolean {
-  return spec.shell === SHELL_GHOST || spec.shell === 'shell-ghost' || spec.shell.includes('Ghost');
+  return spec.shell === 'shell-ghost';
 }
 
 export function isLeadjoyCap(caps: string): boolean {
-  return caps.startsWith('Leadjoy Magic') || caps === 'caps-leadjoy';
+  return caps === 'caps-leadjoy';
 }
 
 /** Ghost analog well: Leadjoy Magic n1 and n2 do not fit. Stock caps only. */
@@ -183,24 +203,62 @@ export function placementLine(spec: DroidSpec): string {
     .join('\n');
 }
 
+function buildLine(spec: DroidSpec): string {
+  if (spec.build) {
+    return `**Build:** ${itemLabel(spec.build)}`;
+  }
+
+  const build = defaultBuild();
+  return build ? `**Build:** ${build.label}` : '**Build:** not set';
+}
+
+function boardLine(spec: DroidSpec): string {
+  if (spec.board) {
+    return `**Board:** ${itemLabel(spec.board)}`;
+  }
+
+  const board = defaultBoard();
+  return board ? `**Board:** ${board.label} (default)` : '**Board:** not set';
+}
+
+function pick(spec: DroidSpec, field: keyof DroidSpec, label: string): string {
+  const value = spec[field];
+  const text = typeof value === 'string' && value ? itemLabel(value) : 'not set';
+  return `**${label}:** ${text}`;
+}
+
 export function specText(spec: DroidSpec): string {
+  const colour = spec.shellNote ? ` (${spec.shellNote})` : '';
   const lines = [
-    `**Board:** ${spec.board || 'not set'}`,
-    `**Sticks:** ${spec.sticks || 'not set'}`,
-    `**Caps:** ${spec.caps || 'not set'}`,
-    `**Shell:** ${spec.shell || 'not set'}${isSoftTouch(spec) && spec.shellNote ? ` (${spec.shellNote})` : ''}`,
-    `**Faces:** ${spec.faces || 'not set'}`,
-    `**Backs:** ${spec.backs || 'not set'}`,
+    buildLine(spec),
+    boardLine(spec),
+    pick(spec, 'sticks', 'Sticks'),
+    pick(spec, 'caps', 'Caps'),
   ];
 
+  if (spec.tension && spec.tension !== TENSION_NONE) {
+    lines.push(pick(spec, 'tension', 'Stick tension'));
+  }
+
+  lines.push(
+    `${pick(spec, 'shell', 'Front shell')}${isSoftTouch(spec) ? colour : ''}`,
+    `${pick(spec, 'rear', 'Rear shell')}${isRearSoftTouch(spec) ? colour : ''}`,
+    pick(spec, 'faces', 'Face buttons'),
+    pick(spec, 'click', 'Button style'),
+    pick(spec, 'backs', 'Back buttons'),
+  );
+
   if (isBb(spec)) {
-    lines.push(`**BB count:** ${spec.bbCount || 'not set'}`);
+    lines.push(`**How many:** ${spec.bbCount || 'not set'}`);
     lines.push(placementLine(spec));
   }
 
-  lines.push(`**Click:** ${spec.click || 'not set'}`);
+  if (spec.shoulders && spec.shoulders !== SHOULDERS_NONE) {
+    lines.push(pick(spec, 'shoulders', 'Shoulder buttons'));
+  }
+
   if (spec.extras.length > 0) {
-    lines.push(`**Extras:** ${spec.extras.join(', ')}`);
+    lines.push(`**Extras:** ${spec.extras.map(id => itemLabel(id)).join(', ')}`);
   }
 
   if (spec.photos.length > 0) {

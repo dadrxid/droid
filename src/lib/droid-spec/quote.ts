@@ -1,32 +1,20 @@
-import {hasItem, liveItem, livePrices} from './menu.js';
+import {
+  buildAmount,
+  defaultBoard,
+  defaultBuild,
+  hasItem,
+  itemLabel,
+  liveItem,
+  livePrices,
+} from './menu.js';
 import {
   CLICK_FACES,
-  FACE_XBOX_ABXY,
-  FACE_XBOX_MEMBRANE,
-  FACE_XBOX_PS,
-  SHELL_SOFT_TOUCH,
+  FACES_RESIN,
   isBb,
   isGhost,
   isLeadjoyCap,
   type DroidSpec,
 } from './state.js';
-
-/** Keep in sync with DroidFix src/lib/droid-rollers-estimate.ts */
-export const QUOTE_BASE_GBP = 179.99;
-
-export const QUOTE_ADDONS = {
-  mouseClickTriggers: 19.99,
-  mouseClickFacesAndTriggers: 34.99,
-  bo5Shell: 24.99,
-  ghostShell: 34.99,
-  softTouchShell: 14.99,
-  dsePaddles: 19.99,
-  bbStyleBacks: 24.99,
-  bbExtraButton: 4.99,
-  leadjoyCaps: 14.99,
-  dseCaps: 9.99,
-  xboxFaces: 4.99,
-} as const;
 
 export const QUOTE_DISCLAIMER
   = 'Just an estimate. Andrew will confirm the total when he is active, then send a checkout link.';
@@ -37,7 +25,7 @@ export function gbp(amount: number): string {
 }
 
 export function inBaseLabel(): string {
-  return `in the ${gbp(livePrices().base)}`;
+  return 'included';
 }
 
 export function plusLabel(amount: number): string {
@@ -49,193 +37,193 @@ export function priced(label: string, extra: string): string {
   return text.length <= 100 ? text : text.slice(0, 100);
 }
 
-export function isHs2(spec: DroidSpec): boolean {
-  return spec.board.includes('HeliumStrike');
-}
-
-export function bbStyleAmount(countRaw: string): number {
+/** Last resort prices, used when the desk sends a row with a blank price. */
+function fallbackAmount(id: string): number {
   const {addons} = livePrices();
-  const count = Number.parseInt(countRaw, 10);
-  const extra = Number.isFinite(count) && count > 2
-    ? (count - 2) * addons.bbExtraButton
-    : 0;
-  return addons.bbStyleBacks + extra;
+  const table: Record<string, number> = {
+    'build-ps5': addons.buildPs5,
+    'board-suiovoi': addons.boardSuiovoi,
+    'helium-hs2': addons.boardHelium,
+    'caps-dse': addons.dseCaps,
+    'caps-leadjoy': addons.leadjoyCaps,
+    'shell-soft': addons.softTouchShell,
+    'shell-bo5': addons.bo5Shell,
+    'shell-ghost': addons.ghostShell,
+    'rear-soft': addons.rearSoftTouch,
+    'rear-splatter': addons.rearSplatter,
+    'faces-colour': addons.colouredFaces,
+    'faces-resin': addons.resinFaces,
+    'faces-xbox-ps': addons.xboxFaces,
+    'faces-xbox-abxy': addons.xboxFaces,
+    'click-triggers': addons.mouseClickTriggers,
+    'click-bumpers': addons.mouseClickBumpersAndTriggers,
+    'click-faces': addons.mouseClickFacesAndTriggers,
+    'backs-bb': addons.bbStyleBacks,
+    'backs-bb-extra': addons.bbExtraButton,
+    'backs-dse': addons.dsePaddles,
+    'tension-20': addons.tension20,
+    'tension-40': addons.tension40,
+    'shoulders-2': addons.shoulders2,
+    'shoulders-4': addons.shoulders4,
+  };
+  return table[id] ?? 0;
 }
 
-type QuoteLine = {label: string; amount: number};
+type QuoteLine = {label: string; amount: number; ask?: boolean};
 
 export type QuoteResult = {
   total: number;
-  hs2Ask: boolean;
+  boardAsk: boolean;
   lines: QuoteLine[];
   headline: string;
   embedField: string;
   pingLine: string;
 };
 
-export function quoteSpec(spec: DroidSpec): QuoteResult {
-  const prices = livePrices();
-  const {addons} = prices;
-  const lines: QuoteLine[] = [
-    {label: 'Base (8K, sticks, resin PlayStation buttons, OEM caps)', amount: prices.base},
+/** A priced line for a pick, or null when the row is off, included or free. */
+function lineFor(id: string, label?: string): QuoteLine | null {
+  if (!id || !hasItem(id)) {
+    return null;
+  }
+
+  const row = liveItem(id);
+  if (row?.inBase) {
+    return null;
+  }
+
+  const amount = typeof row?.priceGbp === 'number' ? row.priceGbp : fallbackAmount(id);
+  if (!amount) {
+    return null;
+  }
+
+  return {label: label ? label : itemLabel(id), amount};
+}
+
+function amountFor(id: string): number {
+  return lineFor(id)?.amount ?? 0;
+}
+
+export function bbStyleAmount(countRaw: string): number {
+  const count = Number.parseInt(countRaw, 10);
+  const extra = Number.isFinite(count) && count > 2
+    ? (count - 2) * amountFor('backs-bb-extra')
+    : 0;
+  return amountFor('backs-bb') + extra;
+}
+
+/** The build itself. Always one line, defaulting to the normal in house build. */
+function buildLine(spec: DroidSpec): QuoteLine {
+  const picked = spec.build && buildAmount(spec.build) > 0 ? liveItem(spec.build) : defaultBuild();
+  if (!picked) {
+    return {label: 'Custom build, built in house', amount: livePrices().base};
+  }
+
+  const amount = buildAmount(picked.id);
+  return {label: picked.label, amount: amount > 0 ? amount : livePrices().base};
+}
+
+/** Every build needs one board. Falls back to the cheapest one still switched on. */
+function boardLine(spec: DroidSpec): QuoteLine {
+  const picked = spec.board && hasItem(spec.board) ? liveItem(spec.board) : defaultBoard();
+  if (!picked) {
+    return {label: 'Custom 8K board', amount: 0, ask: true};
+  }
+
+  if (picked.priceGbp === null) {
+    return {label: picked.label, amount: 0, ask: true};
+  }
+
+  return {label: picked.label, amount: picked.inBase ? 0 : picked.priceGbp};
+}
+
+/**
+ * Face mouse click only actuates through the resin buttons, and the clicky full
+ * kit price already carries them, so they are not charged twice.
+ */
+function resolvedFaces(spec: DroidSpec): string {
+  if (spec.click === CLICK_FACES && spec.faces === FACES_RESIN) {
+    return '';
+  }
+
+  return spec.faces;
+}
+
+function resolvedCaps(spec: DroidSpec): string {
+  if (isGhost(spec) && isLeadjoyCap(spec.caps)) {
+    return '';
+  }
+
+  return spec.caps;
+}
+
+function backsLine(spec: DroidSpec): QuoteLine | null {
+  if (!isBb(spec)) {
+    return lineFor(spec.backs);
+  }
+
+  const base = lineFor('backs-bb');
+  if (!base) {
+    return null;
+  }
+
+  const count = Number.parseInt(spec.bbCount, 10);
+  const counted = Number.isFinite(count) && count > 0;
+  const extra = counted && count > 2 ? (count - 2) * amountFor('backs-bb-extra') : 0;
+  return {
+    label: counted ? `${base.label} · ${String(count)} fitted` : base.label,
+    amount: base.amount + extra,
+  };
+}
+
+function specLines(spec: DroidSpec): Array<QuoteLine | null> {
+  return [
+    lineFor(spec.sticks),
+    lineFor(resolvedCaps(spec)),
+    lineFor(spec.tension),
+    lineFor(spec.shell),
+    lineFor(spec.rear),
+    lineFor(resolvedFaces(spec)),
+    lineFor(spec.click),
+    backsLine(spec),
+    lineFor(spec.shoulders),
+    ...spec.extras.map(id => lineFor(id)),
   ];
-  let total = prices.base;
-  let hs2Ask = isHs2(spec);
+}
 
-  if (spec.faces === FACE_XBOX_PS || spec.faces === FACE_XBOX_ABXY || spec.faces === FACE_XBOX_MEMBRANE || spec.faces === 'faces-xbox-ps' || spec.faces === 'faces-xbox-abxy') {
-    const faceId = spec.faces === FACE_XBOX_ABXY || spec.faces === 'faces-xbox-abxy' ? 'faces-xbox-abxy' : 'faces-xbox-ps';
-    if (hasItem(faceId)) {
-      const row = liveItem(faceId);
-      const amount = row?.inBase ? 0 : (row?.priceGbp ?? addons.xboxFaces);
-      if (amount) {
-        const fallbackLabel = faceId === 'faces-xbox-abxy'
-          ? 'Xbox-shaped buttons with Xbox icons (ABXY)'
-          : 'Xbox-shaped buttons with PlayStation icons';
-        const faceLabel = row?.label ? row.label : fallbackLabel;
-        lines.push({label: faceLabel, amount});
-        total += amount;
-      }
+export function quoteSpec(spec: DroidSpec): QuoteResult {
+  const board = boardLine(spec);
+  const lines: QuoteLine[] = [buildLine(spec), board];
+  for (const line of specLines(spec)) {
+    if (line) {
+      lines.push(line);
     }
   }
 
-  function extraFor(id: string, fallback: number): number {
-    if (!hasItem(id)) {
-      return 0;
-    }
-
-    const row = liveItem(id);
-    if (row?.inBase) {
-      return 0;
-    }
-
-    return typeof row?.priceGbp === 'number' ? row.priceGbp : fallback;
-  }
-
-  if (isLeadjoyCap(spec.caps)) {
-    const amount = extraFor('caps-leadjoy', addons.leadjoyCaps);
-    if (amount) {
-      lines.push({label: spec.caps, amount});
-      total += amount;
-    }
-  } else if (spec.caps.startsWith('DSE') || spec.caps === 'caps-dse') {
-    const amount = extraFor('caps-dse', addons.dseCaps);
-    if (amount) {
-      lines.push({label: 'DSE-style caps', amount});
-      total += amount;
-    }
-  }
-
-  if (isGhost(spec)) {
-    const amount = extraFor('shell-ghost', addons.ghostShell);
-    if (amount) {
-      lines.push({label: 'ExtremeRate Ghost', amount});
-      total += amount;
-    }
-  } else if (spec.shell.startsWith('BO5') || spec.shell === 'shell-bo5') {
-    const amount = extraFor('shell-bo5', addons.bo5Shell);
-    if (amount) {
-      lines.push({label: 'BO5 / themed shell', amount});
-      total += amount;
-    }
-  } else if (spec.shell === SHELL_SOFT_TOUCH || spec.shell === 'shell-soft') {
-    const amount = extraFor('shell-soft', addons.softTouchShell);
-    if (amount) {
-      lines.push({label: 'Soft Touch shell', amount});
-      total += amount;
-    }
-  }
-
-  if (spec.backs.startsWith('DSE paddles') || spec.backs === 'backs-dse') {
-    const amount = extraFor('backs-dse', addons.dsePaddles);
-    if (amount) {
-      lines.push({label: 'DSE paddles (2)', amount});
-      total += amount;
-    }
-  } else if (isBb(spec)) {
-    const amount = extraFor('backs-bb', addons.bbStyleBacks)
-      + (Number.parseInt(spec.bbCount, 10) > 2
-        ? (Number.parseInt(spec.bbCount, 10) - 2) * extraFor('backs-bb-extra', addons.bbExtraButton)
-        : 0);
-    const count = Number.parseInt(spec.bbCount, 10);
-    const label = Number.isFinite(count) && count > 0
-      ? `Battle Beaver style (${String(count)})`
-      : 'Battle Beaver style';
-    if (amount) {
-      lines.push({label, amount});
-      total += amount;
-    }
-  }
-
-  if (spec.click === CLICK_FACES || spec.click === 'click-faces') {
-    const amount = extraFor('click-faces', addons.mouseClickFacesAndTriggers);
-    if (amount) {
-      lines.push({label: 'Mouse click faces + triggers', amount});
-      total += amount;
-    }
-  } else if (spec.click.startsWith('Triggers + bumpers') || spec.click === 'click-triggers') {
-    const amount = extraFor('click-triggers', addons.mouseClickTriggers);
-    if (amount) {
-      lines.push({label: 'Mouse click triggers + bumpers', amount});
-      total += amount;
-    }
-  }
-
-  const customPicks = new Set([
-    spec.board,
-    spec.sticks,
-    spec.caps,
-    spec.shell,
-    spec.faces,
-    spec.backs,
-    spec.click,
-  ]);
-  for (const id of customPicks) {
-    if (!id.startsWith('extra-')) {
-      continue;
-    }
-
-    const row = liveItem(id);
-    if (!row || row.inBase || row.priceGbp === null || row.priceGbp === 0) {
-      continue;
-    }
-
-    lines.push({label: row.label, amount: row.priceGbp});
-    total += row.priceGbp;
-  }
-
-  for (const extra of prices.extras) {
-    if (spec.extras.includes(extra.id)) {
-      lines.push({label: extra.label, amount: extra.priceGbp});
-      total += extra.priceGbp;
-    }
-  }
-
-  if (hs2Ask && prices.heliumGbp !== null) {
-    lines.push({label: 'HeliumStrike HS2 extra', amount: prices.heliumGbp});
-    total += prices.heliumGbp;
-    hs2Ask = false;
-  }
-
-  const headline = hs2Ask ? `${gbp(total)} + HS2 board extra` : gbp(total);
+  const total = lines.reduce((sum, line) => sum + line.amount, 0);
+  const headline = board.ask ? `${gbp(total)} plus the board` : gbp(total);
   const breakdown = lines
     .map((line, index) => {
+      if (line.ask) {
+        return `ask · ${line.label}`;
+      }
+
       const mark = index === 0 ? gbp(line.amount) : plusLabel(line.amount);
       return `${mark} · ${line.label}`;
     })
     .join('\n');
-  const hs2Note = hs2Ask
-    ? 'HeliumStrike HS2 board extra is not in this number yet. Andrew will add it.'
+  const boardNote = board.ask
+    ? `The ${board.label} price is not set yet. Andrew will add it to the total.`
     : '';
   const embedField = [
     `**${headline}**`,
     breakdown,
-    hs2Note,
+    boardNote,
     QUOTE_DISCLAIMER,
   ].filter(Boolean).join('\n');
 
   return {
     total,
-    hs2Ask,
+    boardAsk: Boolean(board.ask),
     lines,
     headline,
     embedField,

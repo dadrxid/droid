@@ -64,15 +64,15 @@ export const TICKET_FORMS: Record<TicketKind, TicketForm> = {
         paragraph: false,
         required: true,
         max: 100,
-        placeholder: 'e.g. PS5 DualSense, PS4 DualShock, Xbox',
+        placeholder: 'e.g. PS5 DualSense, PS4 DualShock, Scuf, Xbox',
       },
       {
         id: 'fault',
-        label: 'What is it doing?',
+        label: 'What is it doing? Or what do you want?',
         paragraph: true,
         required: true,
         max: 900,
-        placeholder: 'e.g. left stick drifts, R2 not clicking, no charge',
+        placeholder: 'e.g. left stick drifts, R2 not clicking, 8K board swap on my own pad',
       },
       {
         id: 'tried',

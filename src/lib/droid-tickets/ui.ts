@@ -23,7 +23,7 @@ export function panelEmbed(emoji: string, logo?: string): EmbedBuilder {
       'Pick a button and fill in the short form. Your private ticket opens straight after.',
       '',
       '**Custom build** · instant price on your spec. Built and shipped in house, 4 to 6 weeks.',
-      '**Repair** · stick drift, dead buttons, charging. UK mail-in only.',
+      '**Repair** · stick drift, dead buttons, charging, or an 8K board swap on a pad you already own. UK mail-in only.',
     ].join('\n'))
     .setFooter({text: 'droidfix.uk · only you and the DroidFix team can see your ticket'});
 
@@ -71,7 +71,8 @@ export function welcomeEmbed(options: {
       `Thanks <@${openerId}>. Post a photo or a short clip of the fault when you can.`,
       '',
       'UK mail-in only.',
-      `${staff} will send you the postage details in here.`,
+      'Already own a custom pad, a Scuf or another modder\'s build? An 8K board swap is welcome here.',
+      `${staff} will send you the postage details and price it up in here.`,
     ];
 
   const embed = new EmbedBuilder()
