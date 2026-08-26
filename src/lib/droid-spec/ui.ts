@@ -57,20 +57,24 @@ const MAX_SELECT_ROWS = 4;
 
 type SelectOpt = {label: string; value: string; description?: string; order?: number};
 
-/** Short lines that explain a pick. The desk note wins when Andrew wrote one. */
+/** Short customer lines. Staff desk notes stay on the website, they do not show here. */
 const OPTION_NOTES: Record<string, string> = {
-  base: 'Pad supplied and built in house. One 8K board always fitted',
-  'build-ps5': 'Pad supplied and built in house. One 8K board always fitted',
-  'caps-leadjoy': 'Magic n1 and n2. They do not fit the Ghost shell',
-  'shell-soft': 'Pick it, then tap Shell colour and type the colour',
-  'shell-bo5': 'Add a photo of the shell you want',
-  'shell-ghost': 'OEM caps only. Leadjoy Magic does not fit',
-  'faces-colour': 'Pick it, then tap Button colour and type the colour',
-  'faces-resin': 'Resin PlayStation icons. Needed for the clicky full kit',
-  'click-faces': 'Faces, bumpers and triggers. Comes with resin buttons',
-  'backs-bb': 'Tactile. You set the height and side for each one',
-  'shoulders-2': 'An extra set on the shoulders',
-  'shoulders-4': 'An extra set on the shoulders',
+  base: 'We supply the pad, build it here, and fit one 8K board',
+  'build-ps5': 'We supply the pad, build it here, and fit one 8K board',
+  'caps-dse': 'DSE style stick caps',
+  'caps-leadjoy': 'Magic n1 or n2. These do not fit the Ghost shell',
+  'shell-soft': 'Tap Colour after this pick, then type the colour you want',
+  'shell-bo5': 'Add a photo of the shell on the last page',
+  'shell-ghost': 'Stock caps only. Leadjoy Magic caps do not fit this shell',
+  'faces-colour': 'Tap Colour after this pick, then type the colour you want',
+  'faces-resin': 'Resin PlayStation icons. Included with the clicky full kit',
+  'click-triggers': 'Mouse click on the triggers only',
+  'click-bumpers': 'Mouse click on the bumpers and triggers',
+  'click-faces': 'Faces, bumpers and triggers. Resin buttons come with this',
+  'backs-bb': 'Tactile paddles. Next you pick how many, then height and side',
+  'backs-dse': 'DSE blades or domes included',
+  'shoulders-2': 'Two extra mouse-click buttons on the shoulders',
+  'shoulders-4': 'Four extra mouse-click buttons on the shoulders',
 };
 
 function tagFor(item: LiveItem): string {
@@ -89,11 +93,23 @@ function tagFor(item: LiveItem): string {
   return plusLabel(item.priceGbp);
 }
 
+function optNote(item: LiveItem): string | undefined {
+  if (OPTION_NOTES[item.id]) {
+    return OPTION_NOTES[item.id];
+  }
+
+  if (item.id.startsWith('extra-') && item.note) {
+    return item.note;
+  }
+
+  return undefined;
+}
+
 function toOpt(item: LiveItem): SelectOpt {
   return {
     label: priced(item.label, tagFor(item)),
     value: item.id,
-    description: item.note ? item.note : OPTION_NOTES[item.id],
+    description: optNote(item),
     order: item.sortOrder,
   };
 }
@@ -184,7 +200,7 @@ function buildOpts(): SelectOpt[] {
   return buildItems().map(item => ({
     label: priced(item.label, `from ${gbp(buildFloor(item))}`),
     value: item.id,
-    description: item.note ? item.note : OPTION_NOTES[item.id],
+    description: optNote(item),
     order: item.sortOrder,
   }));
 }
@@ -232,7 +248,7 @@ const PAGE_TITLES: Record<SpecPage, string> = {
   look: 'Shells, caps and face buttons',
   mods: 'Clicky buttons, back buttons, shoulders',
   bb: 'Back button placements',
-  photos: 'Add photos. Paste them into this ticket.',
+  photos: 'Add photos of shells and extras',
 };
 
 function stepMeta(spec: DroidSpec): {step: number; total: number; title: string} {
@@ -262,6 +278,7 @@ export function startEmbed(emoji = ''): EmbedBuilder {
         `Custom 8K pads from **${gbp(fromPrice())}**. Tap below and pick your parts.`,
         'Andrew supplies the pad, builds it, tests it and posts it out. Nothing to send in.',
         'Only you see the sheet until you submit. The price updates as you go.',
+        'At the end you can add photos of shells, buttons and extras with the photo buttons.',
       ].join('\n'),
     )
     .setImage(`attachment://${BANNER_NAME}`)
@@ -298,7 +315,7 @@ function colourFieldValue(spec: DroidSpec): string {
 
   const missing = missingColour(spec);
   lines.push(missing.length === 0
-    ? 'Andrew builds to these colours. Tap the button again to change them.'
+    ? 'We will build to these colours. Tap the button again if you want to change them.'
     : `Tap **${colourButtonLabel(spec)}** and type the ${missing.join(' and ')}.`);
   return lines.join('\n');
 }
@@ -342,10 +359,17 @@ export function wizardEmbed(spec: DroidSpec): EmbedBuilder {
     embed.setImage(`attachment://${PLACEMENT_NAME}`);
   }
 
+  if (spec.page === 'look') {
+    embed.addFields({
+      name: 'Photos',
+      value: 'On the last page you can add photos of shells, buttons and anything else. Tap a photo button, then paste the image into this ticket.',
+    });
+  }
+
   if (spec.page === 'look' && isGhost(spec)) {
     embed.addFields({
-      name: 'Ghost caps',
-      value: 'OEM caps only. Leadjoy Magic n1 and n2 do not fit the Ghost analog well, so both come off the list.',
+      name: 'Ghost shell',
+      value: 'This shell only works with stock stick caps. Leadjoy Magic caps do not fit, so they come off the list.',
     });
   }
 
@@ -359,7 +383,7 @@ export function wizardEmbed(spec: DroidSpec): EmbedBuilder {
   if ((spec.page === 'mods' || spec.page === 'look') && spec.click === CLICK_FACES) {
     embed.addFields({
       name: 'Clicky full kit',
-      value: 'Face clicks only actuate through the resin PlayStation buttons, so they come with the kit at no extra cost.',
+      value: 'This kit includes resin PlayStation buttons. You do not pay for those separately.',
     });
   }
 
@@ -370,18 +394,19 @@ export function wizardEmbed(spec: DroidSpec): EmbedBuilder {
     embed.addFields({
       name: 'How to add a photo',
       value: [
-        '1. Tap **Add shell photo** (or faces / backs / other).',
-        '2. **Paste or drag the image into this ticket.** Not a link.',
-        '3. The bot copies it and deletes it from chat.',
+        'Use the buttons below for shells, face buttons, back buttons or anything else.',
+        '1. Tap the button that matches what you are sending.',
+        '2. Paste or drag the image into this ticket. Not a link.',
+        '3. The bot saves it, then removes it from chat.',
         '',
         `Shell photo: **${shellDone}**`,
         `Faces photo: **${facesDone}**`,
         `Backs photo: **${backsDone}**`,
       ].join('\n'),
     });
-    embed.setFooter({text: 'The ticket stays clean. Photos only show on the submitted custom build.'});
+    embed.setFooter({text: 'Photos only show on the submitted build. The ticket stays clean.'});
   } else if (spec.page !== 'bb') {
-    embed.setFooter({text: 'Private until you submit. Estimate only. Andrew confirms when he is active.'});
+    embed.setFooter({text: 'Last page: add photos of shells and extras with the buttons. Private until you submit.'});
   }
 
   return embed;
