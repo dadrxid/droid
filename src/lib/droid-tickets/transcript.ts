@@ -32,7 +32,7 @@ function authorName(message: Message): string {
   return message.author.bot ? `${tag} (bot)` : tag;
 }
 
-function readableContent(message: Message): string {
+export function readableContent(message: Message): string {
   let {content} = message;
 
   for (const [id, user] of message.mentions.users) {

@@ -79,6 +79,39 @@ export async function pushTicket(ticket: TicketRecord): Promise<string | undefin
   return typeof url === 'string' ? url : undefined;
 }
 
+export type TicketSiteAttachment = {
+  name: string;
+  url: string;
+  contentType: string;
+  width: number;
+  height: number;
+};
+
+export type TicketSiteMessage = {
+  id: string;
+  authorId: string;
+  authorName: string;
+  authorAvatar: string;
+  bot: boolean;
+  createdAt: string;
+  editedAt: string;
+  content: string;
+  attachments: TicketSiteAttachment[];
+  deleted: boolean;
+};
+
+/** Live conversation mirror. The site keeps the newest 500 per ticket. */
+export async function pushTicketMessages(
+  ticketId: string,
+  messages: TicketSiteMessage[],
+): Promise<void> {
+  if (messages.length === 0) {
+    return;
+  }
+
+  await post('/api/bot/tickets/messages', {ticketId, messages}, 8000);
+}
+
 export async function pushTranscript(
   ticketId: string,
   html: string,
