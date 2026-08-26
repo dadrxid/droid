@@ -6,7 +6,17 @@ import {
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
 } from 'discord.js';
-import {BANNER_NAME, PLACEMENT_NAME, bannerFile, placementFile} from './assets.js';
+import {BANNER_NAME, PLACEMENT_NAME, TAGLINE_NAME, bannerFile, placementFile} from './assets.js';
+import {
+  bbStyleAmount,
+  inBaseLabel,
+  plusLabel,
+  priced,
+  quoteSpec,
+  QUOTE_ADDONS,
+  QUOTE_BASE_GBP,
+  QUOTE_DISCLAIMER,
+} from './quote.js';
 import {
   BACKS_BB,
   CLICK_FACES,
@@ -82,7 +92,11 @@ export function startEmbed(): EmbedBuilder {
     .setColor(BRAND_BLUE)
     .setTitle('Droid Rollers')
     .setDescription(
-      'Custom 8K build spec.\nTap **Start build spec**. Only you will see the form until you submit.',
+      [
+        `Custom 8K build spec. From £${QUOTE_BASE_GBP}.`,
+        'Tap **Start build spec**. Only you will see the form until you submit.',
+        'The total at the end is an estimate. Andrew confirms it when he is active.',
+      ].join('\n'),
     )
     .setImage(`attachment://${BANNER_NAME}`)
     .setFooter({text: '8K custom boards only. Not a stock PS4 board.'});
@@ -105,10 +119,20 @@ export function startFiles() {
 
 export function wizardEmbed(spec: DroidSpec): EmbedBuilder {
   const {step, total, title} = stepMeta(spec);
+  const quote = quoteSpec(spec);
   const embed = new EmbedBuilder()
     .setColor(BRAND_BLUE)
     .setTitle(`Droid Rollers · ${step} of ${total}`)
-    .setDescription(`${title}\n\n${specText(spec)}`);
+    .setDescription(
+      [
+        title,
+        '',
+        `**Estimate: ${quote.headline}**`,
+        QUOTE_DISCLAIMER,
+        '',
+        specText(spec),
+      ].join('\n'),
+    );
 
   if (spec.page === 'bb') {
     const current = spec.bbSlots[spec.bbCursor];
@@ -156,7 +180,7 @@ export function wizardEmbed(spec: DroidSpec): EmbedBuilder {
     });
     embed.setFooter({text: 'The ticket stays clean. Photos only show on the submitted custom build.'});
   } else if (spec.page !== 'bb') {
-    embed.setFooter({text: 'Private until you submit. Andrew quotes, then sends a website checkout link.'});
+    embed.setFooter({text: 'Private until you submit. Estimate only. Andrew confirms when he is active.'});
   }
 
   return embed;
@@ -220,27 +244,27 @@ function coreRows(spec: DroidSpec): any[] {
   lockGhostCaps(spec);
   return [
     selectRow(`${SPEC_PREFIX}board`, spec.board || 'Board', [
-      {label: 'SuiOvOi', value: 'SuiOvOi'},
-      {label: 'HeliumStrike HS2 (Hyperstrike 2)', value: 'HeliumStrike HS2 (Hyperstrike 2)'},
+      {label: priced('SuiOvOi', inBaseLabel()), value: 'SuiOvOi'},
+      {label: priced('HeliumStrike HS2', 'ask'), value: 'HeliumStrike HS2 (Hyperstrike 2)', description: 'Board extra not set yet. Andrew will add it.'},
     ], spec.board),
     selectRow(`${SPEC_PREFIX}sticks`, spec.sticks || 'Sticks', [
-      {label: 'Ginfull RS13', value: 'Ginfull RS13'},
-      {label: 'K-Silver JS13 Pro+', value: 'K-Silver JS13 Pro+'},
+      {label: priced('Ginfull RS13', inBaseLabel()), value: 'Ginfull RS13'},
+      {label: priced('K-Silver JS13 Pro+', inBaseLabel()), value: 'K-Silver JS13 Pro+'},
     ], spec.sticks),
     selectRow(`${SPEC_PREFIX}caps`, spec.caps || (isGhost(spec) ? 'Stock caps only (Ghost)' : 'Stick caps'),
       isGhost(spec)
-        ? [{label: 'OEM (stock)', value: 'OEM', description: 'Ghost: Magic n2 does not fit'}]
+        ? [{label: priced('OEM (stock)', inBaseLabel()), value: 'OEM', description: 'Ghost: Magic n2 does not fit'}]
         : [
-          {label: 'OEM', value: 'OEM'},
-          {label: 'DSE style', value: 'DSE style'},
-          {label: 'Leadjoy Magic n1', value: 'Leadjoy Magic n1'},
-          {label: 'Leadjoy Magic n2', value: 'Leadjoy Magic n2', description: 'Does not fit ExtremeRate Ghost'},
+          {label: priced('OEM', inBaseLabel()), value: 'OEM'},
+          {label: priced('DSE style', plusLabel(QUOTE_ADDONS.dseCaps)), value: 'DSE style'},
+          {label: priced('Leadjoy Magic n1', plusLabel(QUOTE_ADDONS.leadjoyCaps)), value: 'Leadjoy Magic n1'},
+          {label: priced('Leadjoy Magic n2', plusLabel(QUOTE_ADDONS.leadjoyCaps)), value: 'Leadjoy Magic n2', description: 'Does not fit ExtremeRate Ghost'},
         ], spec.caps),
     selectRow(`${SPEC_PREFIX}faces`, spec.faces || 'Face buttons', [
-      {label: 'Droid Rollers Standard', value: FACE_DROID_ROLLERS_STANDARD, description: 'Resin. Use this for mouse click on faces.'},
-      {label: 'Xbox style', value: FACE_XBOX_MEMBRANE, description: 'Membrane only'},
-      {label: 'Stock', value: FACE_STOCK_MEMBRANE, description: 'Membrane only'},
-      {label: 'Stock white', value: FACE_STOCK_WHITE_MEMBRANE, description: 'Membrane only'},
+      {label: priced('Droid Rollers Standard', inBaseLabel()), value: FACE_DROID_ROLLERS_STANDARD, description: 'Resin. Use this for mouse click on faces.'},
+      {label: priced('Xbox style', '£0'), value: FACE_XBOX_MEMBRANE, description: 'Membrane only'},
+      {label: priced('Stock', '£0'), value: FACE_STOCK_MEMBRANE, description: 'Membrane only'},
+      {label: priced('Stock white', '£0'), value: FACE_STOCK_WHITE_MEMBRANE, description: 'Membrane only'},
     ], spec.faces),
     navRow(spec),
   ];
@@ -249,19 +273,19 @@ function coreRows(spec: DroidSpec): any[] {
 function lookRows(spec: DroidSpec): any[] {
   return [
     selectRow(`${SPEC_PREFIX}shell`, spec.shell || 'Shell', [
-      {label: 'Soft Touch Shell', value: 'Soft Touch Shell', description: 'Type the colour, then add a shell photo'},
-      {label: 'BO5 / themed', value: 'BO5 / themed', description: 'Add a photo of the shell'},
-      {label: 'ExtremeRate Ghost', value: 'ExtremeRate Ghost', description: 'Stock caps only. Magic n2 does not fit'},
+      {label: priced('Soft Touch Shell', plusLabel(QUOTE_ADDONS.softTouchShell)), value: 'Soft Touch Shell', description: 'Type the colour, then add a shell photo'},
+      {label: priced('BO5 / themed', plusLabel(QUOTE_ADDONS.bo5Shell)), value: 'BO5 / themed', description: 'Add a photo of the shell'},
+      {label: priced('ExtremeRate Ghost', plusLabel(QUOTE_ADDONS.ghostShell)), value: 'ExtremeRate Ghost', description: 'Stock caps only. Magic n2 does not fit'},
     ], spec.shell),
     selectRow(`${SPEC_PREFIX}backs`, spec.backs || 'Back buttons', [
-      {label: 'None', value: 'None'},
-      {label: 'DSE paddles (2)', value: 'DSE paddles (2)'},
-      {label: 'Battle Beaver style', value: BACKS_BB},
+      {label: priced('None', '£0'), value: 'None'},
+      {label: priced('DSE paddles (2)', plusLabel(QUOTE_ADDONS.dsePaddles)), value: 'DSE paddles (2)'},
+      {label: priced('Battle Beaver style', plusLabel(QUOTE_ADDONS.bbStyleBacks)), value: BACKS_BB, description: '£25 for 1 or 2 buttons, then +£6 each extra'},
     ], spec.backs),
     selectRow(`${SPEC_PREFIX}click`, spec.click || 'Click', [
-      {label: 'None', value: 'None'},
-      {label: 'Triggers + bumpers only', value: 'Triggers + bumpers only (L1/R1 + L2/R2)'},
-      {label: 'Faces + triggers', value: CLICK_FACES, description: 'Needs Droid Rollers Standard resin faces'},
+      {label: priced('None', '£0'), value: 'None'},
+      {label: priced('Triggers + bumpers', plusLabel(QUOTE_ADDONS.mouseClickTriggers)), value: 'Triggers + bumpers only (L1/R1 + L2/R2)'},
+      {label: priced('Faces + triggers', plusLabel(QUOTE_ADDONS.mouseClickFacesAndTriggers)), value: CLICK_FACES, description: 'Needs Droid Rollers Standard resin faces'},
     ], spec.click),
     navRow(spec),
   ];
@@ -284,16 +308,12 @@ function bbRows(spec: DroidSpec): any[] {
   }
 
   return [
-    selectRow(`${SPEC_PREFIX}bbcount`, spec.bbCount ? `${spec.bbCount} buttons` : 'How many buttons? (1 to 8)', [
-      {label: '1', value: '1'},
-      {label: '2', value: '2'},
-      {label: '3', value: '3'},
-      {label: '4', value: '4'},
-      {label: '5', value: '5'},
-      {label: '6', value: '6'},
-      {label: '7', value: '7'},
-      {label: '8', value: '8'},
-    ], spec.bbCount),
+    selectRow(`${SPEC_PREFIX}bbcount`, spec.bbCount ? `${spec.bbCount} buttons` : 'How many buttons? (1 to 8)', (
+      [1, 2, 3, 4, 5, 6, 7, 8] as const
+    ).map(count => ({
+      label: priced(String(count), plusLabel(bbStyleAmount(String(count)))),
+      value: String(count),
+    })), spec.bbCount),
     selectRow(
       `${SPEC_PREFIX}bbplace`,
       selected ? `${selected.replace('|', ' · ')}` : `Button ${String(spec.bbCursor + 1)} placement`,
@@ -397,10 +417,12 @@ export function prevPage(spec: DroidSpec): SpecPage {
 }
 
 export function submittedEmbed(spec: DroidSpec): EmbedBuilder {
+  const quote = quoteSpec(spec);
   return new EmbedBuilder()
     .setColor(BRAND_BLUE)
     .setTitle('Droid Rollers · custom build')
     .setDescription(specText(spec))
-    .setImage(`attachment://${BANNER_NAME}`)
-    .setFooter({text: 'Andrew will quote, then send a website checkout link.'});
+    .addFields({name: 'Estimate', value: quote.embedField})
+    .setImage(`attachment://${TAGLINE_NAME}`)
+    .setFooter({text: QUOTE_DISCLAIMER});
 }

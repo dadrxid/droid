@@ -15,7 +15,8 @@ import {
 import {injectable} from 'inversify';
 import Command from './index.js';
 import {getBotOwnerId, requireGuildAdministrator} from '../utils/require-guild-admin.js';
-import {bannerFile} from '../lib/droid-spec/assets.js';
+import {taglineFile} from '../lib/droid-spec/assets.js';
+import {quoteSpec} from '../lib/droid-spec/quote.js';
 import {isImageMessage, photoAttachments, storeChannelPhoto} from '../lib/droid-spec/photos.js';
 import {
   CLICK_FACES,
@@ -290,7 +291,8 @@ export default class implements Command {
 
     if (interaction.customId === 'droidspec:submit') {
       const ownerId = getBotOwnerId();
-      const files: AttachmentBuilder[] = [bannerFile(), ...photoAttachments(spec.photos)];
+      const quote = quoteSpec(spec);
+      const files: AttachmentBuilder[] = [taglineFile(), ...photoAttachments(spec.photos)];
       const photoEmbeds = spec.photos.map(photo =>
         new EmbedBuilder().setColor(0x0088ff).setTitle(`Photo · ${photo.kind}`).setImage(`attachment://${photo.name}`),
       );
@@ -301,7 +303,7 @@ export default class implements Command {
         attachments: [],
       });
       await interaction.followUp({
-        content: `<@${ownerId}> custom build is in.\nAndrew will quote, then send a checkout link when the listing is ready.`,
+        content: `<@${ownerId}> custom build is in.\n${quote.pingLine}`,
         embeds: [submittedEmbed(spec), ...photoEmbeds],
         files,
         allowedMentions: {users: [ownerId]},

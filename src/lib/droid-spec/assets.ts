@@ -5,10 +5,15 @@ import {AttachmentBuilder} from 'discord.js';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../assets');
 
 export const BANNER_NAME = 'droid-rollers-banner.jpg';
+export const TAGLINE_NAME = 'droid-rollers-tagline.jpg';
 export const PLACEMENT_NAME = 'bb-placement.jpg';
 
 export function bannerFile(): AttachmentBuilder {
   return new AttachmentBuilder(path.join(ROOT, BANNER_NAME), {name: BANNER_NAME});
+}
+
+export function taglineFile(): AttachmentBuilder {
+  return new AttachmentBuilder(path.join(ROOT, TAGLINE_NAME), {name: TAGLINE_NAME});
 }
 
 export function placementFile(): AttachmentBuilder {
