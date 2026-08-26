@@ -47,6 +47,7 @@ import FaqDroidfix from './commands/faq-droidfix.js';
 import WelcomeDroidfix from './commands/welcome-droidfix.js';
 import WelcomeDroidlab from './commands/welcome-droidlab.js';
 import WelcomeTest from './commands/welcome-test.js';
+import RollersSpec from './commands/rollers-spec.js';
 import FileCacheProvider from './services/file-cache.js';
 import KeyValueCacheProvider from './services/key-value-cache.js';
 
@@ -102,6 +103,7 @@ container.bind<YoutubeAPI>(TYPES.Services.YoutubeAPI).to(YoutubeAPI).inSingleton
   WelcomeDroidfix,
   WelcomeDroidlab,
   WelcomeTest,
+  RollersSpec,
 ].forEach(command => {
   container.bind<Command>(TYPES.Command).to(command).inSingletonScope();
 });

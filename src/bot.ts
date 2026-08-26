@@ -184,7 +184,10 @@ export default class {
             await command.execute(interaction);
           }
         } else if (interaction.isButton()) {
-          const command = this.commandsByButtonId.get(interaction.customId);
+          const command = this.commandsByButtonId.get(interaction.customId)
+            ?? (interaction.customId.startsWith('droidspec:')
+              ? this.commandsByName.get('rollers-spec')
+              : undefined);
 
           if (!command) {
             return;
@@ -192,6 +195,24 @@ export default class {
 
           if (command.handleButtonInteraction) {
             await command.handleButtonInteraction(interaction);
+          }
+        } else if (interaction.isStringSelectMenu()) {
+          if (!interaction.customId.startsWith('droidspec:')) {
+            return;
+          }
+
+          const command = this.commandsByName.get('rollers-spec');
+          if (command?.handleSelectMenuInteraction) {
+            await command.handleSelectMenuInteraction(interaction);
+          }
+        } else if (interaction.isModalSubmit()) {
+          if (!interaction.customId.startsWith('droidspec:')) {
+            return;
+          }
+
+          const command = this.commandsByName.get('rollers-spec');
+          if (command?.handleModalSubmit) {
+            await command.handleModalSubmit(interaction);
           }
         } else if (interaction.isAutocomplete()) {
           const command = this.commandsByName.get(interaction.commandName);
@@ -208,9 +229,20 @@ export default class {
         debug(error);
 
         try {
-          if ((interaction.isCommand() || interaction.isButton()) && (interaction.replied || interaction.deferred)) {
+          if (
+            (interaction.isCommand()
+              || interaction.isButton()
+              || interaction.isStringSelectMenu()
+              || interaction.isModalSubmit())
+            && (interaction.replied || interaction.deferred)
+          ) {
             await interaction.editReply(errorMsg(error as Error));
-          } else if (interaction.isCommand() || interaction.isButton()) {
+          } else if (
+            interaction.isCommand()
+            || interaction.isButton()
+            || interaction.isStringSelectMenu()
+            || interaction.isModalSubmit()
+          ) {
             await interaction.reply({content: errorMsg(error as Error), ephemeral: true});
           }
         } catch {}
