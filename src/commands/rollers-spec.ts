@@ -1,6 +1,7 @@
 import {SlashCommandBuilder} from '@discordjs/builders';
 import {
   ActionRowBuilder,
+  AttachmentBuilder,
   ButtonInteraction,
   ChatInputCommandInteraction,
   EmbedBuilder,
@@ -14,68 +15,87 @@ import {
 import {injectable} from 'inversify';
 import Command from './index.js';
 import {getBotOwnerId, requireGuildAdministrator} from '../utils/require-guild-admin.js';
-import {type PhotoKind, getSpec, type DroidSpec} from '../lib/droid-spec/state.js';
-import {extraRows, formRows, photoKindRow, specEmbed} from '../lib/droid-spec/ui.js';
+import {bannerFile} from '../lib/droid-spec/assets.js';
+import {isImageMessage, photoAttachments, storeChannelPhoto} from '../lib/droid-spec/photos.js';
+import {
+  CLICK_FACES,
+  FACE_DROID_ROLLERS_STANDARD,
+  type PhotoKind,
+  applyBbPick,
+  getSpec,
+  isBb,
+  resetSpec,
+  syncBbSlots,
+  type DroidSpec,
+} from '../lib/droid-spec/state.js';
+import {
+  nextPage,
+  photoKindRow,
+  prevPage,
+  startEmbed,
+  startFiles,
+  startRows,
+  submittedEmbed,
+  wizardEmbed,
+  wizardFiles,
+  wizardRows,
+} from '../lib/droid-spec/ui.js';
 
 const PHOTO_WAIT_MS = 60_000;
 const MAX_PHOTOS = 5;
-const pendingKind = new Map<string, PhotoKind>();
+
+type PhotoWait = {kind: PhotoKind; interaction: StringSelectMenuInteraction};
+const photoWait = new Map<string, PhotoWait>();
 
 function waitKey(channelId: string, userId: string): string {
   return `${channelId}:${userId}`;
 }
 
-function isImageMessage(message: Message): boolean {
-  return [...message.attachments.values()].some(file => {
-    const type = file.contentType ?? '';
-    return type.startsWith('image/') || /\.(png|jpe?g|gif|webp|heic)$/i.test(file.name ?? '');
-  });
+function wizardPayload(spec: DroidSpec) {
+  return {
+    content: '',
+    embeds: [wizardEmbed(spec)],
+    components: wizardRows(spec),
+    files: wizardFiles(spec),
+    attachments: wizardFiles(spec).length === 0 ? [] : undefined,
+  };
 }
 
-async function refresh(
+function guardOwner(
   interaction: ButtonInteraction | StringSelectMenuInteraction | ModalSubmitInteraction,
   spec: DroidSpec,
+): boolean {
+  if (!spec.ownerId || spec.ownerId === interaction.user.id) {
+    return true;
+  }
+
+  void interaction.reply({
+    content: `This spec is being filled by <@${spec.ownerId}>.`,
+    ephemeral: true,
+  }).catch(() => undefined);
+  return false;
+}
+
+async function showWizard(
+  interaction: ButtonInteraction | StringSelectMenuInteraction,
+  spec: DroidSpec,
 ): Promise<void> {
-  const embed = specEmbed(spec);
-  const channel = interaction.channel;
-  const canEdit = Boolean(channel && 'messages' in channel);
-
-  if (interaction.isModalSubmit()) {
-    if (spec.formMessageId && canEdit) {
-      await channel!.messages.edit(spec.formMessageId, {embeds: [embed], components: formRows()});
-    }
-
-    if (spec.extraMessageId && canEdit) {
-      await channel!.messages.edit(spec.extraMessageId, {embeds: [embed], components: extraRows()});
-    }
-
-    return;
-  }
-
-  const onForm = interaction.message.id === spec.formMessageId;
-  if (onForm) {
-    await interaction.update({embeds: [embed], components: formRows()});
-    if (spec.extraMessageId && canEdit) {
-      await channel!.messages.edit(spec.extraMessageId, {embeds: [embed], components: extraRows()});
-    }
-  } else {
-    await interaction.update({embeds: [embed], components: extraRows()});
-    if (spec.formMessageId && canEdit) {
-      await channel!.messages.edit(spec.formMessageId, {embeds: [embed], components: formRows()});
-    }
-  }
+  await interaction.update(wizardPayload(spec) as never);
 }
 
 @injectable()
 export default class implements Command {
   public readonly slashCommand = new SlashCommandBuilder()
     .setName('rollers-spec')
-    .setDescription('Post the custom 8K spec form in this ticket (Admin only)');
+    .setDescription('Post the Droid Rollers spec starter in this ticket (Admin only)');
 
   public readonly handledButtonIds = [
+    'droidspec:start',
+    'droidspec:next',
+    'droidspec:back',
+    'droidspec:bbprev',
     'droidspec:photo',
     'droidspec:shellnote',
-    'droidspec:bbnote',
     'droidspec:submit',
   ];
 
@@ -89,16 +109,14 @@ export default class implements Command {
       return;
     }
 
-    const spec = getSpec(interaction.channel.id);
-    const embed = specEmbed(spec);
-    await interaction.reply({embeds: [embed], components: formRows()});
-    const form = await interaction.fetchReply();
-    const extra = await interaction.channel.send({
-      embeds: [embed],
-      components: extraRows(),
+    resetSpec(interaction.channel.id);
+    await interaction.reply({
+      embeds: [startEmbed()],
+      components: startRows(),
+      files: startFiles(),
     });
-    spec.formMessageId = form.id;
-    spec.extraMessageId = extra.id;
+    const start = await interaction.fetchReply();
+    getSpec(interaction.channel.id).startMessageId = start.id;
   }
 
   async handleSelectMenuInteraction(interaction: StringSelectMenuInteraction): Promise<void> {
@@ -106,14 +124,18 @@ export default class implements Command {
       return;
     }
 
-    const spec = getSpec(interaction.channelId);
-    const value = interaction.values[0] ?? '';
-    const id = interaction.customId;
-
-    if (id === 'droidspec:photokind') {
-      await this.startPhotoWait(interaction, value as PhotoKind);
+    if (interaction.customId === 'droidspec:photokind') {
+      await this.startPhotoWait(interaction, (interaction.values[0] ?? 'other') as PhotoKind);
       return;
     }
+
+    const spec = getSpec(interaction.channelId);
+    if (!guardOwner(interaction, spec)) {
+      return;
+    }
+
+    const value = interaction.values[0] ?? '';
+    const id = interaction.customId;
 
     if (id === 'droidspec:board') {
       spec.board = value;
@@ -127,15 +149,22 @@ export default class implements Command {
       spec.faces = value;
     } else if (id === 'droidspec:backs') {
       spec.backs = value;
+      if (isBb(spec)) {
+        syncBbSlots(spec);
+      }
     } else if (id === 'droidspec:click') {
       spec.click = value;
+      if (value === CLICK_FACES) {
+        spec.faces = FACE_DROID_ROLLERS_STANDARD;
+      }
     } else if (id === 'droidspec:bbcount') {
       spec.bbCount = value;
+      syncBbSlots(spec);
     } else if (id === 'droidspec:bbplace') {
-      spec.bbPlace = value;
+      applyBbPick(spec, value);
     }
 
-    await refresh(interaction, spec);
+    await showWizard(interaction, spec);
   }
 
   async handleButtonInteraction(interaction: ButtonInteraction): Promise<void> {
@@ -146,6 +175,50 @@ export default class implements Command {
 
     const spec = getSpec(interaction.channelId);
 
+    if (interaction.customId === 'droidspec:start') {
+      if (spec.ownerId && spec.ownerId !== interaction.user.id) {
+        await interaction.reply({
+          content: `This spec is being filled by <@${spec.ownerId}>.`,
+          ephemeral: true,
+        });
+        return;
+      }
+
+      spec.ownerId = interaction.user.id;
+      spec.page = spec.page || 'core';
+      await interaction.reply({
+        ...wizardPayload(spec),
+        ephemeral: true,
+      } as never);
+      return;
+    }
+
+    if (!guardOwner(interaction, spec)) {
+      return;
+    }
+
+    if (interaction.customId === 'droidspec:next') {
+      spec.page = nextPage(spec);
+      if (spec.page === 'bb') {
+        syncBbSlots(spec);
+      }
+
+      await showWizard(interaction, spec);
+      return;
+    }
+
+    if (interaction.customId === 'droidspec:back') {
+      spec.page = prevPage(spec);
+      await showWizard(interaction, spec);
+      return;
+    }
+
+    if (interaction.customId === 'droidspec:bbprev') {
+      spec.bbCursor = Math.max(0, spec.bbCursor - 1);
+      await showWizard(interaction, spec);
+      return;
+    }
+
     if (interaction.customId === 'droidspec:photo') {
       if (spec.photos.length >= MAX_PHOTOS) {
         await interaction.reply({content: `Max ${String(MAX_PHOTOS)} photos.`, ephemeral: true});
@@ -153,7 +226,7 @@ export default class implements Command {
       }
 
       await interaction.reply({
-        content: 'What is this photo of?',
+        content: 'What is this photo of? After you pick, paste or drag it here. The bot takes it and deletes it from the ticket.',
         components: [photoKindRow()],
         ephemeral: true,
       });
@@ -179,34 +252,24 @@ export default class implements Command {
       return;
     }
 
-    if (interaction.customId === 'droidspec:bbnote') {
-      const modal = new ModalBuilder()
-        .setCustomId('droidspec:modalbb')
-        .setTitle('Battle Beaver placement')
-        .addComponents(
-          new ActionRowBuilder<TextInputBuilder>().addComponents(
-            new TextInputBuilder()
-              .setCustomId('note')
-              .setLabel('Left / right / extra notes')
-              .setStyle(TextInputStyle.Paragraph)
-              .setRequired(false)
-              .setMaxLength(200)
-              .setPlaceholder('e.g. 2 high left, 2 standard right'),
-          ),
-        );
-      await interaction.showModal(modal as never);
-      return;
-    }
-
     if (interaction.customId === 'droidspec:submit') {
       const ownerId = getBotOwnerId();
-      const photoEmbeds = spec.photos.slice(0, 8).map(photo =>
-        new EmbedBuilder().setTitle(`Photo · ${photo.kind}`).setImage(photo.url),
+      const files: AttachmentBuilder[] = [bannerFile(), ...photoAttachments(spec.photos)];
+      const photoEmbeds = spec.photos.map(photo =>
+        new EmbedBuilder().setColor(0x0088ff).setTitle(`Photo · ${photo.kind}`).setImage(`attachment://${photo.name}`),
       );
-      await interaction.reply({
+      await interaction.update({
+        content: 'Submitted. The spec is now in the ticket.',
+        embeds: [],
+        components: [],
+        attachments: [],
+      });
+      await interaction.followUp({
         content: `<@${ownerId}> spec is in.\nAndrew will quote, then send a checkout link when the listing is ready.`,
-        embeds: [specEmbed(spec), ...photoEmbeds],
+        embeds: [submittedEmbed(spec), ...photoEmbeds],
+        files,
         allowedMentions: {users: [ownerId]},
+        ephemeral: false,
       });
     }
   }
@@ -217,15 +280,15 @@ export default class implements Command {
     }
 
     const spec = getSpec(interaction.channelId);
-    const note = interaction.fields.getTextInputValue('note').trim();
-    if (interaction.customId === 'droidspec:modalshell') {
-      spec.shellNote = note;
-    } else if (interaction.customId === 'droidspec:modalbb') {
-      spec.bbNote = note;
+    if (!guardOwner(interaction, spec)) {
+      return;
     }
 
-    await interaction.reply({content: 'Saved.', ephemeral: true});
-    await refresh(interaction, spec);
+    spec.shellNote = interaction.fields.getTextInputValue('note').trim();
+    await interaction.reply({
+      content: spec.shellNote ? `Shell colour saved: ${spec.shellNote}` : 'Shell colour cleared.',
+      ephemeral: true,
+    });
   }
 
   private async startPhotoWait(interaction: StringSelectMenuInteraction, kind: PhotoKind): Promise<void> {
@@ -235,9 +298,15 @@ export default class implements Command {
       return;
     }
 
-    pendingKind.set(waitKey(interaction.channelId, interaction.user.id), kind);
+    const spec = getSpec(interaction.channelId);
+    if (!guardOwner(interaction, spec)) {
+      return;
+    }
+
+    const key = waitKey(interaction.channelId, interaction.user.id);
+    photoWait.set(key, {kind, interaction});
     await interaction.update({
-      content: `Paste or drag a **${kind}** photo in this ticket now (60 seconds). Not a link.`,
+      content: `Paste or drag a **${kind}** photo in this ticket now (60 seconds). The bot will store it and delete it from the chat.`,
       components: [],
     });
 
@@ -249,35 +318,32 @@ export default class implements Command {
     });
 
     collector.on('collect', message => {
-      const spec = getSpec(interaction.channelId);
-      const file = [...message.attachments.values()].find(file => {
-        const type = file.contentType ?? '';
-        return type.startsWith('image/') || /\.(png|jpe?g|gif|webp|heic)$/i.test(file.name ?? '');
-      });
-      if (!file || spec.photos.length >= MAX_PHOTOS) {
-        return;
-      }
+      void (async () => {
+        if (spec.photos.length >= MAX_PHOTOS) {
+          await message.delete().catch(() => undefined);
+          return;
+        }
 
-      spec.photos.push({kind, url: file.url, name: file.name ?? 'photo'});
-      pendingKind.delete(waitKey(interaction.channelId, interaction.user.id));
-      void message.react('✅').catch(() => undefined);
-      if (spec.formMessageId && 'messages' in channel) {
-        void channel.messages.edit(spec.formMessageId, {
-          embeds: [specEmbed(spec)],
-          components: formRows(),
-        }).catch(() => undefined);
-      }
+        const stored = await storeChannelPhoto(interaction.channelId, kind, message);
+        photoWait.delete(key);
+        if (!stored) {
+          await interaction.followUp({
+            content: 'Could not save that photo. Try a smaller image.',
+            ephemeral: true,
+          }).catch(() => undefined);
+          return;
+        }
 
-      if (spec.extraMessageId && 'messages' in channel) {
-        void channel.messages.edit(spec.extraMessageId, {
-          embeds: [specEmbed(spec)],
-          components: extraRows(),
+        spec.photos.push(stored);
+        await interaction.followUp({
+          content: `Saved **${kind}** photo. It is off the ticket until you submit.`,
+          ephemeral: true,
         }).catch(() => undefined);
-      }
+      })();
     });
 
     collector.on('end', collected => {
-      pendingKind.delete(waitKey(interaction.channelId, interaction.user.id));
+      photoWait.delete(key);
       if (collected.size === 0) {
         void interaction.followUp({
           content: 'No photo received in 60 seconds. Use **Add photo** again.',

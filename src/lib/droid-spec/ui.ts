@@ -6,76 +6,240 @@ import {
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
 } from 'discord.js';
-import {type DroidSpec, photoKindLabel, specText} from './state.js';
+import {BANNER_NAME, PLACEMENT_NAME, bannerFile, placementFile} from './assets.js';
+import {
+  BACKS_BB,
+  CLICK_FACES,
+  FACE_DROID_ROLLERS_STANDARD,
+  FACE_STOCK_MEMBRANE,
+  FACE_STOCK_WHITE_MEMBRANE,
+  FACE_XBOX_MEMBRANE,
+  type DroidSpec,
+  type SpecPage,
+  isBb,
+  specText,
+} from './state.js';
 
 export const SPEC_PREFIX = 'droidspec:';
+export const BRAND_BLUE = 0x0088ff;
+
+type SelectOpt = {label: string; value: string; description?: string};
 
 function selectRow(
   customId: string,
   placeholder: string,
-  options: Array<{label: string; value: string}>,
+  options: SelectOpt[],
+  selected?: string,
+  disabled = false,
 ): ActionRowBuilder<StringSelectMenuBuilder> {
   return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
     new StringSelectMenuBuilder()
       .setCustomId(customId)
       .setPlaceholder(placeholder)
-      .addOptions(options.map(opt => new StringSelectMenuOptionBuilder().setLabel(opt.label).setValue(opt.value))),
+      .setDisabled(disabled)
+      .addOptions(options.map(opt => {
+        const item = new StringSelectMenuOptionBuilder()
+          .setLabel(opt.label)
+          .setValue(opt.value);
+        if (opt.description) {
+          item.setDescription(opt.description.slice(0, 100));
+        }
+
+        if (selected && selected === opt.value) {
+          item.setDefault(true);
+        }
+
+        return item;
+      })),
   );
 }
 
-export function specEmbed(spec: DroidSpec): EmbedBuilder {
-  return new EmbedBuilder()
-    .setColor(0x0088ff)
-    .setTitle('Build spec for Andrew')
-    .setDescription(
-      `${specText(spec)}\n\n8K custom boards only. Not a stock PS4 board.\nPaste or drag photos in this ticket after **Add photo**.`,
-    )
-    .setFooter({text: 'Andrew will quote, then send a website checkout link.'});
+function stepMeta(spec: DroidSpec): {step: number; total: number; title: string} {
+  const extra = isBb(spec) ? 1 : 0;
+  const total = 3 + extra;
+  if (spec.page === 'core') {
+    return {step: 1, total, title: 'Board and faces'};
+  }
+
+  if (spec.page === 'look') {
+    return {step: 2, total, title: 'Shell, backs, click'};
+  }
+
+  if (spec.page === 'bb') {
+    return {step: 3, total, title: 'Battle Beaver placements'};
+  }
+
+  return {step: total, total, title: 'Photos and submit'};
 }
 
-export function formRows(): any[] {
+export function startEmbed(): EmbedBuilder {
+  return new EmbedBuilder()
+    .setColor(BRAND_BLUE)
+    .setTitle('Droid Rollers')
+    .setDescription(
+      'Custom 8K build spec.\nTap **Start build spec**. Only you will see the form until you submit.',
+    )
+    .setImage(`attachment://${BANNER_NAME}`)
+    .setFooter({text: '8K custom boards only. Not a stock PS4 board.'});
+}
+
+export function startRows(): any[] {
   return [
-    selectRow(`${SPEC_PREFIX}board`, 'Board', [
+    new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${SPEC_PREFIX}start`)
+        .setLabel('Start build spec')
+        .setStyle(ButtonStyle.Primary),
+    ),
+  ];
+}
+
+export function startFiles() {
+  return [bannerFile()];
+}
+
+export function wizardEmbed(spec: DroidSpec): EmbedBuilder {
+  const {step, total, title} = stepMeta(spec);
+  const embed = new EmbedBuilder()
+    .setColor(BRAND_BLUE)
+    .setTitle(`Droid Rollers · ${step} of ${total}`)
+    .setDescription(`${title}\n\n${specText(spec)}`);
+
+  if (spec.page === 'bb') {
+    const current = spec.bbSlots[spec.bbCursor];
+    const n = spec.bbCursor + 1;
+    embed.addFields({
+      name: spec.bbCount ? `Tick button ${String(n)} of ${spec.bbCount}` : 'How many buttons?',
+      value: current?.height
+        ? `This button: ${current.height} · ${current.side}`
+        : 'Pick a height and side for this button. Same idea as Battle Beaver: each button gets its own spot.',
+    });
+    embed.setImage(`attachment://${PLACEMENT_NAME}`);
+  }
+
+  if (spec.page === 'photos') {
+    embed.setFooter({text: 'Paste or drag a photo after Add photo. It is pulled from the ticket so the chat stays clean.'});
+  } else if (spec.page !== 'bb') {
+    embed.setFooter({text: 'Private until you submit. Andrew quotes, then sends a website checkout link.'});
+  }
+
+  return embed;
+}
+
+export function wizardFiles(spec: DroidSpec) {
+  if (spec.page === 'bb') {
+    return [placementFile()];
+  }
+
+  return [];
+}
+
+function navRow(spec: DroidSpec): ActionRowBuilder<ButtonBuilder> {
+  const back = new ButtonBuilder()
+    .setCustomId(`${SPEC_PREFIX}back`)
+    .setLabel('Back')
+    .setStyle(ButtonStyle.Secondary)
+    .setDisabled(spec.page === 'core');
+
+  if (spec.page === 'photos') {
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(
+      back,
+      new ButtonBuilder().setCustomId(`${SPEC_PREFIX}photo`).setLabel('Add photo').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`${SPEC_PREFIX}submit`).setLabel('Submit spec').setStyle(ButtonStyle.Success),
+    );
+  }
+
+  if (spec.page === 'look') {
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(
+      back,
+      new ButtonBuilder().setCustomId(`${SPEC_PREFIX}shellnote`).setLabel('Shell colour').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`${SPEC_PREFIX}next`).setLabel('Next').setStyle(ButtonStyle.Primary),
+    );
+  }
+
+  if (spec.page === 'bb') {
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(
+      back,
+      new ButtonBuilder()
+        .setCustomId(`${SPEC_PREFIX}bbprev`)
+        .setLabel('Prev button')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(spec.bbCursor <= 0),
+      new ButtonBuilder().setCustomId(`${SPEC_PREFIX}next`).setLabel('Next').setStyle(ButtonStyle.Primary),
+    );
+  }
+
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(
+    back,
+    new ButtonBuilder().setCustomId(`${SPEC_PREFIX}next`).setLabel('Next').setStyle(ButtonStyle.Primary),
+  );
+}
+
+function coreRows(spec: DroidSpec): any[] {
+  return [
+    selectRow(`${SPEC_PREFIX}board`, spec.board || 'Board', [
       {label: 'SuiOvOi', value: 'SuiOvOi'},
       {label: 'HeliumStrike HS2 (Hyperstrike 2)', value: 'HeliumStrike HS2 (Hyperstrike 2)'},
-    ]),
-    selectRow(`${SPEC_PREFIX}sticks`, 'Sticks', [
+    ], spec.board),
+    selectRow(`${SPEC_PREFIX}sticks`, spec.sticks || 'Sticks', [
       {label: 'Ginfull RS13', value: 'Ginfull RS13'},
       {label: 'K-Silver JS13 Pro+', value: 'K-Silver JS13 Pro+'},
-    ]),
-    selectRow(`${SPEC_PREFIX}caps`, 'Stick caps', [
+    ], spec.sticks),
+    selectRow(`${SPEC_PREFIX}caps`, spec.caps || 'Stick caps', [
       {label: 'OEM', value: 'OEM'},
       {label: 'DSE style', value: 'DSE style'},
       {label: 'Leadjoy Magic n1', value: 'Leadjoy Magic n1'},
       {label: 'Leadjoy Magic n2', value: 'Leadjoy Magic n2'},
-    ]),
-    selectRow(`${SPEC_PREFIX}shell`, 'Shell', [
-      {label: 'Soft Touch Shell', value: 'Soft Touch Shell'},
-      {label: 'BO5 / themed', value: 'BO5 / themed'},
-      {label: 'ExtremeRate Ghost', value: 'ExtremeRate Ghost'},
-    ]),
-    selectRow(`${SPEC_PREFIX}faces`, 'Face buttons', [
-      {label: 'DR Standard (resin)', value: 'DR Standard (resin buttons)'},
-      {label: 'Xbox style (membrane only)', value: 'Xbox style face buttons (membrane only)'},
-      {label: 'Stock / standard', value: 'Stock / standard face buttons'},
-      {label: 'Stock / standard white', value: 'Stock / standard face buttons but white'},
-    ]),
+    ], spec.caps),
+    selectRow(`${SPEC_PREFIX}faces`, spec.faces || 'Face buttons', [
+      {label: 'Droid Rollers Standard', value: FACE_DROID_ROLLERS_STANDARD, description: 'Resin. Use this for mouse click on faces.'},
+      {label: 'Xbox style', value: FACE_XBOX_MEMBRANE, description: 'Membrane only'},
+      {label: 'Stock', value: FACE_STOCK_MEMBRANE, description: 'Membrane only'},
+      {label: 'Stock white', value: FACE_STOCK_WHITE_MEMBRANE, description: 'Membrane only'},
+    ], spec.faces),
+    navRow(spec),
   ];
 }
 
-export function extraRows(): any[] {
+function lookRows(spec: DroidSpec): any[] {
   return [
-    selectRow(`${SPEC_PREFIX}backs`, 'Back buttons', [
+    selectRow(`${SPEC_PREFIX}shell`, spec.shell || 'Shell', [
+      {label: 'Soft Touch Shell', value: 'Soft Touch Shell'},
+      {label: 'BO5 / themed', value: 'BO5 / themed'},
+      {label: 'ExtremeRate Ghost', value: 'ExtremeRate Ghost'},
+    ], spec.shell),
+    selectRow(`${SPEC_PREFIX}backs`, spec.backs || 'Back buttons', [
       {label: 'None', value: 'None'},
       {label: 'DSE paddles (2)', value: 'DSE paddles (2)'},
-      {label: 'Battle Beaver style', value: 'Battle Beaver style'},
-    ]),
-    selectRow(`${SPEC_PREFIX}click`, 'Click', [
+      {label: 'Battle Beaver style', value: BACKS_BB},
+    ], spec.backs),
+    selectRow(`${SPEC_PREFIX}click`, spec.click || 'Click', [
       {label: 'None', value: 'None'},
       {label: 'Triggers + bumpers only', value: 'Triggers + bumpers only (L1/R1 + L2/R2)'},
-      {label: 'Faces + triggers', value: 'Faces + triggers'},
-    ]),
-    selectRow(`${SPEC_PREFIX}bbcount`, 'Battle Beaver count (if BB)', [
+      {label: 'Faces + triggers', value: CLICK_FACES, description: 'Needs Droid Rollers Standard resin faces'},
+    ], spec.click),
+    navRow(spec),
+  ];
+}
+
+const HEIGHTS = ['High', 'Medium', 'Standard', "Buster's", 'Low', 'Lower'] as const;
+const SIDES = ['Left', 'Right'] as const;
+
+function bbRows(spec: DroidSpec): any[] {
+  const current = spec.bbSlots[spec.bbCursor];
+  const selected = current?.height ? `${current.height}|${current.side}` : undefined;
+  const placeOpts: SelectOpt[] = [];
+  for (const height of HEIGHTS) {
+    for (const side of SIDES) {
+      placeOpts.push({
+        label: `${height} · ${side}`,
+        value: `${height}|${side}`,
+      });
+    }
+  }
+
+  return [
+    selectRow(`${SPEC_PREFIX}bbcount`, spec.bbCount ? `${spec.bbCount} buttons` : 'How many buttons? (1 to 8)', [
       {label: '1', value: '1'},
       {label: '2', value: '2'},
       {label: '3', value: '3'},
@@ -84,21 +248,36 @@ export function extraRows(): any[] {
       {label: '6', value: '6'},
       {label: '7', value: '7'},
       {label: '8', value: '8'},
-    ]),
-    selectRow(`${SPEC_PREFIX}bbplace`, 'Battle Beaver height (if BB)', [
-      {label: 'High', value: 'High'},
-      {label: 'Medium', value: 'Medium'},
-      {label: 'Standard', value: 'Standard'},
-      {label: 'Low', value: 'Low'},
-      {label: 'Lower', value: 'Lower'},
-    ]),
-    new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId(`${SPEC_PREFIX}photo`).setLabel('Add photo').setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId(`${SPEC_PREFIX}shellnote`).setLabel('Shell colour').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId(`${SPEC_PREFIX}bbnote`).setLabel('BB left/right notes').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId(`${SPEC_PREFIX}submit`).setLabel('Submit spec').setStyle(ButtonStyle.Success),
+    ], spec.bbCount),
+    selectRow(
+      `${SPEC_PREFIX}bbplace`,
+      selected ? `${selected.replace('|', ' · ')}` : `Button ${String(spec.bbCursor + 1)} placement`,
+      placeOpts,
+      selected,
+      !spec.bbCount,
     ),
+    navRow(spec),
   ];
+}
+
+function photoRows(spec: DroidSpec): any[] {
+  return [navRow(spec)];
+}
+
+export function wizardRows(spec: DroidSpec): any[] {
+  if (spec.page === 'look') {
+    return lookRows(spec);
+  }
+
+  if (spec.page === 'bb') {
+    return bbRows(spec);
+  }
+
+  if (spec.page === 'photos') {
+    return photoRows(spec);
+  }
+
+  return coreRows(spec);
 }
 
 export function photoKindRow(): any {
@@ -110,10 +289,39 @@ export function photoKindRow(): any {
   ]);
 }
 
-export function photoSummary(spec: DroidSpec): string {
-  if (spec.photos.length === 0) {
-    return 'No photos yet.';
+export function nextPage(spec: DroidSpec): SpecPage {
+  if (spec.page === 'core') {
+    return 'look';
   }
 
-  return spec.photos.map(photo => `${photoKindLabel(photo.kind)}: ${photo.name}`).join('\n');
+  if (spec.page === 'look') {
+    return isBb(spec) ? 'bb' : 'photos';
+  }
+
+  return 'photos';
+}
+
+export function prevPage(spec: DroidSpec): SpecPage {
+  if (spec.page === 'photos') {
+    return isBb(spec) ? 'bb' : 'look';
+  }
+
+  if (spec.page === 'bb') {
+    return 'look';
+  }
+
+  if (spec.page === 'look') {
+    return 'core';
+  }
+
+  return 'core';
+}
+
+export function submittedEmbed(spec: DroidSpec): EmbedBuilder {
+  return new EmbedBuilder()
+    .setColor(BRAND_BLUE)
+    .setTitle('Droid Rollers · spec in')
+    .setDescription(specText(spec))
+    .setImage(`attachment://${BANNER_NAME}`)
+    .setFooter({text: 'Andrew will quote, then send a website checkout link.'});
 }

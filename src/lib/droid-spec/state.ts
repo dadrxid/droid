@@ -1,12 +1,21 @@
 export type PhotoKind = 'shell' | 'faces' | 'backs' | 'other';
+export type SpecPage = 'core' | 'look' | 'bb' | 'photos';
+export type BbSide = 'Left' | 'Right';
 
 export interface SpecPhoto {
   kind: PhotoKind;
-  url: string;
   name: string;
+  path: string;
+}
+
+export interface BbSlot {
+  height: string;
+  side: BbSide;
 }
 
 export interface DroidSpec {
+  ownerId: string;
+  page: SpecPage;
   board: string;
   sticks: string;
   caps: string;
@@ -14,17 +23,25 @@ export interface DroidSpec {
   shellNote: string;
   faces: string;
   backs: string;
-  bbCount: string;
-  bbPlace: string;
-  bbNote: string;
   click: string;
+  bbCount: string;
+  bbCursor: number;
+  bbSlots: BbSlot[];
   photos: SpecPhoto[];
-  formMessageId: string;
-  extraMessageId: string;
+  startMessageId: string;
 }
+
+export const FACE_DROID_ROLLERS_STANDARD = 'Droid Rollers Standard (resin · mouse click)';
+export const FACE_XBOX_MEMBRANE = 'Xbox style (membrane only)';
+export const FACE_STOCK_MEMBRANE = 'Stock (membrane only)';
+export const FACE_STOCK_WHITE_MEMBRANE = 'Stock white (membrane only)';
+export const CLICK_FACES = 'Faces + triggers (Droid Rollers Standard)';
+export const BACKS_BB = 'Battle Beaver style';
 
 export function emptySpec(): DroidSpec {
   return {
+    ownerId: '',
+    page: 'core',
     board: '',
     sticks: '',
     caps: '',
@@ -32,13 +49,12 @@ export function emptySpec(): DroidSpec {
     shellNote: '',
     faces: '',
     backs: '',
-    bbCount: '2',
-    bbPlace: '',
-    bbNote: '',
     click: '',
+    bbCount: '',
+    bbCursor: 0,
+    bbSlots: [],
     photos: [],
-    formMessageId: '',
-    extraMessageId: '',
+    startMessageId: '',
   };
 }
 
@@ -54,8 +70,50 @@ export function getSpec(channelId: string): DroidSpec {
   return spec;
 }
 
-export function setSpec(channelId: string, spec: DroidSpec): void {
+export function resetSpec(channelId: string): DroidSpec {
+  const spec = emptySpec();
   byChannel.set(channelId, spec);
+  return spec;
+}
+
+export function isBb(spec: DroidSpec): boolean {
+  return spec.backs === BACKS_BB;
+}
+
+export function syncBbSlots(spec: DroidSpec): void {
+  const count = Number.parseInt(spec.bbCount, 10);
+  if (!Number.isFinite(count) || count < 1) {
+    spec.bbSlots = [];
+    spec.bbCursor = 0;
+    return;
+  }
+
+  spec.bbSlots = spec.bbSlots.slice(0, count);
+  while (spec.bbSlots.length < count) {
+    spec.bbSlots.push({height: '', side: 'Left'});
+  }
+
+  const firstEmpty = spec.bbSlots.findIndex(slot => !slot.height);
+  spec.bbCursor = firstEmpty === -1 ? Math.max(0, count - 1) : firstEmpty;
+}
+
+export function applyBbPick(spec: DroidSpec, raw: string): void {
+  const [height, side] = raw.split('|');
+  if (!height || (side !== 'Left' && side !== 'Right')) {
+    return;
+  }
+
+  syncBbSlots(spec);
+  const slot = spec.bbSlots[spec.bbCursor];
+  if (!slot) {
+    return;
+  }
+
+  slot.height = height;
+  slot.side = side;
+  if (spec.bbCursor < spec.bbSlots.length - 1) {
+    spec.bbCursor += 1;
+  }
 }
 
 export function photoKindLabel(kind: PhotoKind): string {
@@ -74,6 +132,23 @@ export function photoKindLabel(kind: PhotoKind): string {
   return 'Other';
 }
 
+export function placementLine(spec: DroidSpec): string {
+  if (!isBb(spec)) {
+    return '';
+  }
+
+  if (spec.bbSlots.length === 0) {
+    return '**Placements:** pick how many, then tick each button';
+  }
+
+  return spec.bbSlots
+    .map((slot, index) => {
+      const mark = slot.height ? `${slot.height} · ${slot.side}` : 'not set';
+      return `**${index + 1}.** ${mark}`;
+    })
+    .join('\n');
+}
+
 export function specText(spec: DroidSpec): string {
   const lines = [
     `**Board:** ${spec.board || 'not set'}`,
@@ -83,9 +158,10 @@ export function specText(spec: DroidSpec): string {
     `**Faces:** ${spec.faces || 'not set'}`,
     `**Backs:** ${spec.backs || 'not set'}`,
   ];
-  if (spec.backs.includes('Battle Beaver')) {
+
+  if (isBb(spec)) {
     lines.push(`**BB count:** ${spec.bbCount || 'not set'}`);
-    lines.push(`**BB where:** ${spec.bbPlace || 'not set'}${spec.bbNote ? ` · ${spec.bbNote}` : ''}`);
+    lines.push(placementLine(spec));
   }
 
   lines.push(`**Click:** ${spec.click || 'not set'}`);
