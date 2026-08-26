@@ -283,7 +283,7 @@ export function startEmbed(emoji = ''): EmbedBuilder {
     )
     .setImage(`attachment://${BANNER_NAME}`)
     .setFooter({
-      text: '8K custom boards only · estimate until Andrew confirms · UK tracked postage included',
+      text: '8K custom boards only · prices as shown · UK tracked postage included',
     });
 }
 
@@ -330,8 +330,7 @@ export function wizardEmbed(spec: DroidSpec): EmbedBuilder {
       [
         title,
         '',
-        `**Estimate: ${quote.headline}**`,
-        QUOTE_DISCLAIMER,
+        `**Total: ${quote.headline}**`,
         '',
         specText(spec),
       ].join('\n'),
@@ -653,7 +652,7 @@ export function submittedEmbed(spec: DroidSpec): EmbedBuilder {
     .setTitle('Droid Rollers · custom build')
     .setDescription(specText(spec))
     .addFields(
-      {name: 'Estimate', value: quote.embedField},
+      {name: 'Total', value: quote.embedField},
       {name: 'Postage', value: livePrices().postageNote},
     )
     .setImage(`attachment://${TAGLINE_NAME}`)

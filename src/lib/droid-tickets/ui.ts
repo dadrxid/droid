@@ -65,7 +65,7 @@ export function welcomeEmbed(options: {
       `Thanks <@${openerId}>. Pick your parts on the build sheet below and the price updates as you go.`,
       '',
       'Built and shipped in house · 4 to 6 weeks, sometimes sooner · UK postage included.',
-      `${staff} confirms the final total and can sort anything else in here.`,
+      `${staff} will send the checkout link and can sort anything else in here.`,
     ]
     : [
       `Thanks <@${openerId}>. Post a photo or a short clip of the fault when you can.`,

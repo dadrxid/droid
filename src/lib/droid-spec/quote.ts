@@ -19,7 +19,7 @@ import {
 } from './state.js';
 
 export const QUOTE_DISCLAIMER
-  = 'Just an estimate. Andrew will confirm the total when he is active, then send a checkout link.';
+  = 'This is the price. Andrew will send a checkout link in this ticket.';
 
 export function gbp(amount: number): string {
   const rounded = Math.round(amount * 100) / 100;
@@ -233,6 +233,6 @@ export function quoteSpec(spec: DroidSpec): QuoteResult {
     lines,
     headline,
     embedField,
-    pingLine: `Estimate: ${headline}. ${QUOTE_DISCLAIMER}`,
+    pingLine: `Total: ${headline}. ${QUOTE_DISCLAIMER}`,
   };
 }
