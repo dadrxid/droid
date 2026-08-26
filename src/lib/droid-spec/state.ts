@@ -73,7 +73,10 @@ export function getSpec(channelId: string): DroidSpec {
     spec = emptySpec();
     byChannel.set(channelId, spec);
   }
-  if (!Array.isArray(spec.extras)) spec.extras = [];
+
+  if (!Array.isArray(spec.extras)) {
+    spec.extras = [];
+  }
 
   return spec;
 }
@@ -85,19 +88,19 @@ export function resetSpec(channelId: string): DroidSpec {
 }
 
 export function isBb(spec: DroidSpec): boolean {
-  return spec.backs === BACKS_BB;
+  return spec.backs === BACKS_BB || spec.backs === 'backs-bb';
 }
 
 export function isSoftTouch(spec: DroidSpec): boolean {
-  return spec.shell === SHELL_SOFT_TOUCH;
+  return spec.shell === SHELL_SOFT_TOUCH || spec.shell === 'shell-soft';
 }
 
 export function isGhost(spec: DroidSpec): boolean {
-  return spec.shell === SHELL_GHOST;
+  return spec.shell === SHELL_GHOST || spec.shell === 'shell-ghost' || spec.shell.includes('Ghost');
 }
 
 export function isLeadjoyCap(caps: string): boolean {
-  return caps.startsWith('Leadjoy Magic');
+  return caps.startsWith('Leadjoy Magic') || caps === 'caps-leadjoy';
 }
 
 /** Ghost analog well: Leadjoy Magic n1 and n2 do not fit. Stock caps only. */
@@ -199,6 +202,7 @@ export function specText(spec: DroidSpec): string {
   if (spec.extras.length > 0) {
     lines.push(`**Extras:** ${spec.extras.join(', ')}`);
   }
+
   if (spec.photos.length > 0) {
     lines.push(`**Photos:** ${spec.photos.map(photo => photoKindLabel(photo.kind)).join(', ')}`);
   } else {

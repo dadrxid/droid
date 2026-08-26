@@ -18,19 +18,33 @@ export type LiveExtra = {
   priceGbp: number;
 };
 
+export type LiveItem = {
+  id: string;
+  group: string;
+  label: string;
+  note?: string;
+  priceGbp: number | null;
+  inBase: boolean;
+  sortOrder: number;
+};
+
 export type LivePrices = {
+  live: boolean;
   base: number;
   addons: LiveAddons;
   heliumGbp: number | null;
   extras: LiveExtra[];
+  items: LiveItem[];
   postageNote: string;
 };
 
 export const FALLBACK_PRICES: LivePrices = {
+  live: false,
   base: 179.99,
   heliumGbp: null,
   extras: [],
-  postageNote: "UK tracked postage is included on Droid Rollers customs.",
+  items: [],
+  postageNote: 'UK tracked postage is included on Droid Rollers customs.',
   addons: {
     mouseClickTriggers: 19.99,
     mouseClickFacesAndTriggers: 34.99,
@@ -48,68 +62,129 @@ export const FALLBACK_PRICES: LivePrices = {
 
 type ApiItem = {
   id?: string;
+  group?: string;
   label?: string;
+  note?: string;
   priceGbp?: number | null;
+  inBase?: boolean;
+  sortOrder?: number;
 };
 
 function money(items: ApiItem[], id: string, fallback: number): number {
-  const row = items.find((item) => item.id === id);
-  return typeof row?.priceGbp === "number" ? row.priceGbp : fallback;
+  const row = items.find(item => item.id === id);
+  if (row?.inBase) {
+    return 0;
+  }
+
+  return typeof row?.priceGbp === 'number' ? row.priceGbp : fallback;
 }
 
 function mapPrices(payload: {postageNote?: string; items?: ApiItem[]}): LivePrices {
   const items = Array.isArray(payload.items) ? payload.items : [];
-  const heliumRow = items.find((item) => item.id === "helium-hs2");
+  const heliumRow = items.find(item => item.id === 'helium-hs2');
+  const mappedItems: LiveItem[] = items
+    .filter((row): row is ApiItem & {id: string} => typeof row.id === 'string' && row.id.length > 0)
+    .map((row, index) => ({
+      id: row.id,
+      group: row.group ? row.group : 'extras',
+      label: row.label ? row.label : row.id,
+      note: row.note,
+      priceGbp: typeof row.priceGbp === 'number' ? row.priceGbp : null,
+      inBase: row.inBase === true,
+      sortOrder: typeof row.sortOrder === 'number' ? row.sortOrder : index,
+    }))
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+
   return {
-    base: money(items, "base", FALLBACK_PRICES.base),
-    heliumGbp: typeof heliumRow?.priceGbp === "number" ? heliumRow.priceGbp : null,
-    postageNote: payload.postageNote || FALLBACK_PRICES.postageNote,
-    extras: items
-      .filter((row) => typeof row.id === "string" && row.id.startsWith("extra-") && typeof row.priceGbp === "number")
-      .map((row) => ({
-        id: row.id as string,
-        label: row.label || "Extra",
-        priceGbp: row.priceGbp as number,
+    live: true,
+    base: money(items, 'base', FALLBACK_PRICES.base),
+    heliumGbp: typeof heliumRow?.priceGbp === 'number' ? heliumRow.priceGbp : null,
+    postageNote: payload.postageNote ? payload.postageNote : FALLBACK_PRICES.postageNote,
+    extras: mappedItems
+      .filter(row => row.group === 'extras' && typeof row.priceGbp === 'number')
+      .map(row => ({
+        id: row.id,
+        label: row.label,
+        priceGbp: row.priceGbp!,
       })),
+    items: mappedItems,
     addons: {
-      mouseClickTriggers: money(items, "click-triggers", FALLBACK_PRICES.addons.mouseClickTriggers),
-      mouseClickFacesAndTriggers: money(items, "click-faces", FALLBACK_PRICES.addons.mouseClickFacesAndTriggers),
-      bo5Shell: money(items, "shell-bo5", FALLBACK_PRICES.addons.bo5Shell),
-      ghostShell: money(items, "shell-ghost", FALLBACK_PRICES.addons.ghostShell),
-      softTouchShell: money(items, "shell-soft", FALLBACK_PRICES.addons.softTouchShell),
-      dsePaddles: money(items, "backs-dse", FALLBACK_PRICES.addons.dsePaddles),
-      bbStyleBacks: money(items, "backs-bb", FALLBACK_PRICES.addons.bbStyleBacks),
-      bbExtraButton: money(items, "backs-bb-extra", FALLBACK_PRICES.addons.bbExtraButton),
-      leadjoyCaps: money(items, "caps-leadjoy", FALLBACK_PRICES.addons.leadjoyCaps),
-      dseCaps: money(items, "caps-dse", FALLBACK_PRICES.addons.dseCaps),
+      mouseClickTriggers: money(items, 'click-triggers', FALLBACK_PRICES.addons.mouseClickTriggers),
+      mouseClickFacesAndTriggers: money(items, 'click-faces', FALLBACK_PRICES.addons.mouseClickFacesAndTriggers),
+      bo5Shell: money(items, 'shell-bo5', FALLBACK_PRICES.addons.bo5Shell),
+      ghostShell: money(items, 'shell-ghost', FALLBACK_PRICES.addons.ghostShell),
+      softTouchShell: money(items, 'shell-soft', FALLBACK_PRICES.addons.softTouchShell),
+      dsePaddles: money(items, 'backs-dse', FALLBACK_PRICES.addons.dsePaddles),
+      bbStyleBacks: money(items, 'backs-bb', FALLBACK_PRICES.addons.bbStyleBacks),
+      bbExtraButton: money(items, 'backs-bb-extra', FALLBACK_PRICES.addons.bbExtraButton),
+      leadjoyCaps: money(items, 'caps-leadjoy', FALLBACK_PRICES.addons.leadjoyCaps),
+      dseCaps: money(items, 'caps-dse', FALLBACK_PRICES.addons.dseCaps),
       xboxFaces: money(
         items,
-        "faces-xbox-ps",
-        money(items, "faces-xbox-abxy", money(items, "faces-xbox", FALLBACK_PRICES.addons.xboxFaces)),
+        'faces-xbox-ps',
+        money(items, 'faces-xbox-abxy', money(items, 'faces-xbox', FALLBACK_PRICES.addons.xboxFaces)),
       ),
     },
   };
 }
 
 let cache: LivePrices = FALLBACK_PRICES;
-let fetchedAt = 0;
-const TTL_MS = 30_000;
+let inflight: Promise<LivePrices> | null = null;
 
 export function livePrices(): LivePrices {
   return cache;
 }
 
-export async function refreshLivePrices(): Promise<LivePrices> {
-  if (Date.now() - fetchedAt < TTL_MS) return cache;
-  fetchedAt = Date.now();
-  const url = process.env.DROIDFIX_MENU_URL?.trim() || "https://droidfix.uk/api/droid-rollers-menu";
-  try {
-    const res = await fetch(url, {signal: AbortSignal.timeout(2500)});
-    if (!res.ok) return cache;
-    const payload = (await res.json()) as {postageNote?: string; items?: ApiItem[]};
-    cache = mapPrices(payload);
-    return cache;
-  } catch {
-    return cache;
+export function liveItem(id: string): LiveItem | undefined {
+  return cache.items.find(row => row.id === id);
+}
+
+export function hasItem(id: string): boolean {
+  if (!cache.live) {
+    return true;
   }
+
+  return cache.items.some(row => row.id === id);
+}
+
+export function priceTag(item: LiveItem): string {
+  if (item.inBase) {
+    return `in the £${String(livePrices().base)}`;
+  }
+
+  if (item.priceGbp === null) {
+    return 'ask';
+  }
+
+  if (item.priceGbp === 0) {
+    return '£0';
+  }
+
+  return `+£${Number.isInteger(item.priceGbp) ? String(item.priceGbp) : item.priceGbp.toFixed(2)}`;
+}
+
+export async function refreshLivePrices(): Promise<LivePrices> {
+  if (inflight) {
+    return inflight;
+  }
+
+  const configuredUrl = process.env.DROIDFIX_MENU_URL?.trim();
+  const url = configuredUrl ? configuredUrl : 'https://droidfix.uk/api/droid-rollers-menu';
+  inflight = (async () => {
+    try {
+      const res = await fetch(url, {signal: AbortSignal.timeout(2500)});
+      if (!res.ok) {
+        return cache;
+      }
+
+      const payload = (await res.json()) as {postageNote?: string; items?: ApiItem[]};
+      cache = mapPrices(payload);
+      return cache;
+    } catch {
+      return cache;
+    } finally {
+      inflight = null;
+    }
+  })();
+  return inflight;
 }

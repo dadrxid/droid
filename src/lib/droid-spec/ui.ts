@@ -7,7 +7,7 @@ import {
   StringSelectMenuOptionBuilder,
 } from 'discord.js';
 import {BANNER_NAME, PLACEMENT_NAME, TAGLINE_NAME, bannerFile, placementFile} from './assets.js';
-import {livePrices} from './menu.js';
+import {hasItem, liveItem, livePrices} from './menu.js';
 import {
   bbStyleAmount,
   gbp,
@@ -24,7 +24,6 @@ import {
   FACE_STOCK_MEMBRANE,
   FACE_STOCK_WHITE_MEMBRANE,
   FACE_XBOX_ABXY,
-  FACE_XBOX_MEMBRANE,
   FACE_XBOX_PS,
   type DroidSpec,
   type PhotoKind,
@@ -40,7 +39,65 @@ import {
 export const SPEC_PREFIX = 'droidspec:';
 export const BRAND_BLUE = 0x0088ff;
 
-type SelectOpt = {label: string; value: string; description?: string};
+type SelectOpt = {label: string; value: string; description?: string; order?: number};
+
+function tagFor(id: string, fallback: string): string {
+  const item = liveItem(id);
+  if (!item) {
+    return fallback;
+  }
+
+  if (item.inBase) {
+    return inBaseLabel();
+  }
+
+  if (item.priceGbp === null) {
+    return 'ask';
+  }
+
+  if (item.priceGbp === 0) {
+    return '£0';
+  }
+
+  return plusLabel(item.priceGbp);
+}
+
+function liveOpt(
+  id: string,
+  label: string,
+  value: string,
+  fallbackTag: string,
+  description?: string,
+): SelectOpt | null {
+  if (!hasItem(id)) {
+    return null;
+  }
+
+  const item = liveItem(id);
+  return {
+    label: priced(item?.label ? item.label : label, tagFor(id, fallbackTag)),
+    value,
+    description,
+    order: item?.sortOrder,
+  };
+}
+
+function extraGroupOpts(group: string, knownIds: string[]): SelectOpt[] {
+  const skip = new Set(knownIds);
+  return livePrices().items
+    .filter(item => item.group === group && item.id.startsWith('extra-') && !skip.has(item.id))
+    .map(item => ({
+      label: priced(item.label, tagFor(item.id, item.priceGbp === null ? 'ask' : plusLabel(item.priceGbp))),
+      value: item.id,
+      order: item.sortOrder,
+    }));
+}
+
+function compactOpts(list: Array<SelectOpt | null>): SelectOpt[] {
+  return list
+    .filter((row): row is SelectOpt => Boolean(row))
+    .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+}
 
 function selectRow(
   customId: string,
@@ -253,60 +310,93 @@ function navRow(spec: DroidSpec): ActionRowBuilder<ButtonBuilder> {
 
 function coreRows(spec: DroidSpec): any[] {
   lockGhostCaps(spec);
+  const helium = liveItem('helium-hs2');
+  const heliumTag = helium ? tagFor(helium.id, 'ask') : 'ask';
+  const boardOpts = compactOpts([
+    liveOpt('base', 'SuiOvOi', 'SuiOvOi', inBaseLabel()) ?? {label: priced('SuiOvOi', inBaseLabel()), value: 'SuiOvOi'},
+    helium
+      ? liveOpt(helium.id, helium.label, 'HeliumStrike HS2 (Hyperstrike 2)', heliumTag, helium.note)
+      : (livePrices().live ? null : {label: priced('HeliumStrike HS2', 'ask'), value: 'HeliumStrike HS2 (Hyperstrike 2)', description: 'Board extra not set yet. Andrew will add it.'}),
+  ]);
+  const stickOpts = compactOpts([
+    liveOpt('sticks-ginfull', 'Ginfull RS13', 'Ginfull RS13', inBaseLabel()),
+    liveOpt('sticks-ksilver', 'K-Silver JS13 Pro+', 'K-Silver JS13 Pro+', inBaseLabel()),
+    ...extraGroupOpts('sticks', ['sticks-ginfull', 'sticks-ksilver']),
+  ]);
+  const capOpts = isGhost(spec)
+    ? compactOpts([liveOpt('caps-oem', 'OEM (stock)', 'OEM', inBaseLabel(), 'Ghost: Magic n1 and n2 do not fit')])
+    : compactOpts([
+      liveOpt('caps-oem', 'OEM', 'OEM', inBaseLabel()),
+      liveOpt('caps-dse', 'DSE style', 'DSE style', plusLabel(livePrices().addons.dseCaps)),
+      liveOpt('caps-leadjoy', 'Leadjoy Magic n1', 'Leadjoy Magic n1', plusLabel(livePrices().addons.leadjoyCaps)),
+      liveOpt('caps-leadjoy', 'Leadjoy Magic n2', 'Leadjoy Magic n2', plusLabel(livePrices().addons.leadjoyCaps), 'n1 and n2 do not fit ExtremeRate Ghost'),
+      ...extraGroupOpts('caps', ['caps-oem', 'caps-dse', 'caps-leadjoy', 'caps-ghost-leadjoy']),
+    ]);
+  const faceOpts = compactOpts([
+    liveOpt('faces-resin', 'Droid Rollers Standard', FACE_DROID_ROLLERS_STANDARD, inBaseLabel(), 'Resin PlayStation icons. Needed for face mouse click.'),
+    liveOpt('faces-xbox-ps', 'Xbox shape · PS icons', FACE_XBOX_PS, plusLabel(livePrices().addons.xboxFaces)),
+    liveOpt('faces-xbox-abxy', 'Xbox shape · ABXY', FACE_XBOX_ABXY, plusLabel(livePrices().addons.xboxFaces)),
+    liveOpt('faces-stock', 'Stock', FACE_STOCK_MEMBRANE, '£0', 'Stock PlayStation buttons'),
+    liveOpt('faces-stock', 'Stock white', FACE_STOCK_WHITE_MEMBRANE, '£0', 'Stock white PlayStation buttons'),
+    liveOpt('faces-silicone', 'Silicone instead of resin', 'faces-silicone', '£0'),
+    ...extraGroupOpts('faces', ['faces-resin', 'faces-stock', 'faces-xbox-ps', 'faces-xbox-abxy', 'faces-silicone']),
+  ]);
+
   return [
-    selectRow(`${SPEC_PREFIX}board`, spec.board || 'Board', [
-      {label: priced('SuiOvOi', inBaseLabel()), value: 'SuiOvOi'},
-      {label: priced('HeliumStrike HS2', 'ask'), value: 'HeliumStrike HS2 (Hyperstrike 2)', description: 'Board extra not set yet. Andrew will add it.'},
-    ], spec.board),
-    selectRow(`${SPEC_PREFIX}sticks`, spec.sticks || 'Sticks', [
+    selectRow(`${SPEC_PREFIX}board`, spec.board || 'Board', boardOpts.length ? boardOpts : [{label: priced('SuiOvOi', inBaseLabel()), value: 'SuiOvOi'}], spec.board),
+    selectRow(`${SPEC_PREFIX}sticks`, spec.sticks || 'Sticks', stickOpts.length ? stickOpts : [
       {label: priced('Ginfull RS13', inBaseLabel()), value: 'Ginfull RS13'},
       {label: priced('K-Silver JS13 Pro+', inBaseLabel()), value: 'K-Silver JS13 Pro+'},
     ], spec.sticks),
-    selectRow(`${SPEC_PREFIX}caps`, spec.caps || (isGhost(spec) ? 'Stock caps only (Ghost)' : 'Stick caps'),
-      isGhost(spec)
-        ? [{label: priced('OEM (stock)', inBaseLabel()), value: 'OEM', description: 'Ghost: Magic n1 and n2 do not fit'}]
-        : [
-          {label: priced('OEM', inBaseLabel()), value: 'OEM'},
-          {label: priced('DSE style', plusLabel(livePrices().addons.dseCaps)), value: 'DSE style'},
-          {label: priced('Leadjoy Magic n1', plusLabel(livePrices().addons.leadjoyCaps)), value: 'Leadjoy Magic n1'},
-          {label: priced('Leadjoy Magic n2', plusLabel(livePrices().addons.leadjoyCaps)), value: 'Leadjoy Magic n2', description: 'n1 and n2 do not fit ExtremeRate Ghost'},
-        ], spec.caps),
-    selectRow(`${SPEC_PREFIX}faces`, spec.faces || 'Face buttons', [
-      {label: priced('Droid Rollers Standard', inBaseLabel()), value: FACE_DROID_ROLLERS_STANDARD, description: 'Resin PlayStation icons. Needed for face mouse click.'},
-      {label: priced('Xbox shape · PS icons', plusLabel(livePrices().addons.xboxFaces)), value: FACE_XBOX_PS, description: `Xbox-shaped buttons, PlayStation icons. ${plusLabel(livePrices().addons.xboxFaces)}`},
-      {label: priced('Xbox shape · ABXY', plusLabel(livePrices().addons.xboxFaces)), value: FACE_XBOX_ABXY, description: `Xbox-shaped buttons, Xbox icons. ${plusLabel(livePrices().addons.xboxFaces)}`},
-      {label: priced('Stock', '£0'), value: FACE_STOCK_MEMBRANE, description: 'Stock PlayStation buttons'},
-      {label: priced('Stock white', '£0'), value: FACE_STOCK_WHITE_MEMBRANE, description: 'Stock white PlayStation buttons'},
+    selectRow(`${SPEC_PREFIX}caps`, spec.caps || (isGhost(spec) ? 'Stock caps only (Ghost)' : 'Stick caps'), capOpts.length ? capOpts : [{label: priced('OEM', inBaseLabel()), value: 'OEM'}], spec.caps),
+    selectRow(`${SPEC_PREFIX}faces`, spec.faces || 'Face buttons', faceOpts.length ? faceOpts : [
+      {label: priced('Droid Rollers Standard', inBaseLabel()), value: FACE_DROID_ROLLERS_STANDARD},
     ], spec.faces),
     navRow(spec),
   ];
 }
 
 function lookRows(spec: DroidSpec): any[] {
+  const shellOpts = compactOpts([
+    liveOpt('shell-soft', 'Soft Touch Shell', 'Soft Touch Shell', plusLabel(livePrices().addons.softTouchShell), 'Type the colour, then add a shell photo'),
+    liveOpt('shell-bo5', 'BO5 / themed', 'BO5 / themed', plusLabel(livePrices().addons.bo5Shell), 'Add a photo of the shell'),
+    liveOpt('shell-ghost', 'ExtremeRate Ghost', 'ExtremeRate Ghost', plusLabel(livePrices().addons.ghostShell), 'Stock caps only. Magic n1 and n2 do not fit'),
+    ...extraGroupOpts('shell', ['shell-soft', 'shell-bo5', 'shell-ghost']),
+  ]);
+  const backOpts = compactOpts([
+    liveOpt('backs-none', 'None', 'None', '£0'),
+    liveOpt('backs-dse', 'DSE paddles (2)', 'DSE paddles (2)', plusLabel(livePrices().addons.dsePaddles)),
+    liveOpt('backs-bb', 'Battle Beaver style', BACKS_BB, plusLabel(livePrices().addons.bbStyleBacks), `${gbp(livePrices().addons.bbStyleBacks)} for 1 or 2 buttons, then ${plusLabel(livePrices().addons.bbExtraButton)} each extra`),
+    ...extraGroupOpts('backs', ['backs-none', 'backs-dse', 'backs-bb', 'backs-bb-extra']),
+  ]);
+  const clickOpts = compactOpts([
+    liveOpt('click-none', 'None', 'None', '£0'),
+    liveOpt('click-triggers', 'Triggers + bumpers', 'Triggers + bumpers only (L1/R1 + L2/R2)', plusLabel(livePrices().addons.mouseClickTriggers)),
+    liveOpt('click-faces', 'Faces + triggers', CLICK_FACES, plusLabel(livePrices().addons.mouseClickFacesAndTriggers), 'Needs Droid Rollers Standard resin PlayStation buttons'),
+    ...extraGroupOpts('click', ['click-none', 'click-triggers', 'click-faces']),
+  ]);
+
   return [
-    selectRow(`${SPEC_PREFIX}shell`, spec.shell || 'Shell', [
-      {label: priced('Soft Touch Shell', plusLabel(livePrices().addons.softTouchShell)), value: 'Soft Touch Shell', description: 'Type the colour, then add a shell photo'},
-      {label: priced('BO5 / themed', plusLabel(livePrices().addons.bo5Shell)), value: 'BO5 / themed', description: 'Add a photo of the shell'},
-      {label: priced('ExtremeRate Ghost', plusLabel(livePrices().addons.ghostShell)), value: 'ExtremeRate Ghost', description: 'Stock caps only. Magic n1 and n2 do not fit'},
+    selectRow(`${SPEC_PREFIX}shell`, spec.shell || 'Shell', shellOpts.length ? shellOpts : [
+      {label: priced('Soft Touch Shell', plusLabel(livePrices().addons.softTouchShell)), value: 'Soft Touch Shell'},
     ], spec.shell),
-    selectRow(`${SPEC_PREFIX}backs`, spec.backs || 'Back buttons', [
+    selectRow(`${SPEC_PREFIX}backs`, spec.backs || 'Back buttons', backOpts.length ? backOpts : [
       {label: priced('None', '£0'), value: 'None'},
-      {label: priced('DSE paddles (2)', plusLabel(livePrices().addons.dsePaddles)), value: 'DSE paddles (2)'},
-      {label: priced('Battle Beaver style', plusLabel(livePrices().addons.bbStyleBacks)), value: BACKS_BB, description: `${gbp(livePrices().addons.bbStyleBacks)} for 1 or 2 buttons, then ${plusLabel(livePrices().addons.bbExtraButton)} each extra`},
     ], spec.backs),
-    selectRow(`${SPEC_PREFIX}click`, spec.click || 'Click', [
+    selectRow(`${SPEC_PREFIX}click`, spec.click || 'Click', clickOpts.length ? clickOpts : [
       {label: priced('None', '£0'), value: 'None'},
-      {label: priced('Triggers + bumpers', plusLabel(livePrices().addons.mouseClickTriggers)), value: 'Triggers + bumpers only (L1/R1 + L2/R2)'},
-      {label: priced('Faces + triggers', plusLabel(livePrices().addons.mouseClickFacesAndTriggers)), value: CLICK_FACES, description: 'Needs Droid Rollers Standard resin PlayStation buttons'},
     ], spec.click),
     ...extrasRows(spec),
     navRow(spec),
   ];
 }
 
-function extrasRows(spec: DroidSpec): any[] {
+function extrasRows(spec: DroidSpec): Array<ActionRowBuilder<StringSelectMenuBuilder>> {
   const extras = livePrices().extras.slice(0, 25);
-  if (extras.length === 0) return [];
+  if (extras.length === 0) {
+    return [];
+  }
+
   const menu = new StringSelectMenuBuilder()
     .setCustomId(`${SPEC_PREFIX}extras`)
     .setPlaceholder('Optional extras')
@@ -320,10 +410,11 @@ function extrasRows(spec: DroidSpec): any[] {
         .setDefault(spec.extras.includes(extra.id)),
     );
   }
+
   return [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu)];
 }
 
-const HEIGHTS = ['High', 'Medium', 'Standard', "Buster's", 'Low', 'Lower'] as const;
+const HEIGHTS = ['High', 'Medium', 'Standard', 'Buster\'s', 'Low', 'Lower'] as const;
 const SIDES = ['Left', 'Right'] as const;
 
 function bbRows(spec: DroidSpec): any[] {

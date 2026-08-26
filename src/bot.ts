@@ -19,6 +19,7 @@ import {syncSlashCommands} from './utils/sync-slash-commands.js';
 import {isInvalidDiscordTokenError, waitBeforeDiscordLoginRetry} from './utils/discord-login-retry.js';
 import createDiscordClient from './utils/create-discord-client.js';
 import {setActiveDiscordClient} from './utils/discord-client-holder.js';
+import {handleSpecButton, handleSpecModal, handleSpecSelect} from './lib/droid-spec/wizard.js';
 
 @injectable()
 export default class {
@@ -184,9 +185,14 @@ export default class {
             await command.execute(interaction);
           }
         } else if (interaction.isButton()) {
+          if (interaction.customId.startsWith('droidspec:')) {
+            await handleSpecButton(interaction);
+            return;
+          }
+
           const command = this.commandsByButtonId.get(interaction.customId)
-            ?? (interaction.customId.startsWith('droidspec:')
-              ? this.commandsByName.get('rollers-spec')
+            ?? (interaction.customId.startsWith('dt:')
+              ? this.commandsByName.get('droid-tickets')
               : undefined);
 
           if (!command) {
@@ -201,16 +207,18 @@ export default class {
             return;
           }
 
-          const command = this.commandsByName.get('rollers-spec');
-          if (command?.handleSelectMenuInteraction) {
-            await command.handleSelectMenuInteraction(interaction);
-          }
+          await handleSpecSelect(interaction);
         } else if (interaction.isModalSubmit()) {
-          if (!interaction.customId.startsWith('droidspec:')) {
+          if (interaction.customId.startsWith('droidspec:')) {
+            await handleSpecModal(interaction);
             return;
           }
 
-          const command = this.commandsByName.get('rollers-spec');
+          if (!interaction.customId.startsWith('dt:')) {
+            return;
+          }
+
+          const command = this.commandsByName.get('droid-tickets');
           if (command?.handleModalSubmit) {
             await command.handleModalSubmit(interaction);
           }

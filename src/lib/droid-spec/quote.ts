@@ -1,4 +1,4 @@
-import {livePrices} from './menu.js';
+import {hasItem, liveItem, livePrices} from './menu.js';
 import {
   CLICK_FACES,
   FACE_XBOX_ABXY,
@@ -28,8 +28,8 @@ export const QUOTE_ADDONS = {
   xboxFaces: 4.99,
 } as const;
 
-export const QUOTE_DISCLAIMER =
-  'Just an estimate. Andrew will confirm the total when he is active, then send a checkout link.';
+export const QUOTE_DISCLAIMER
+  = 'Just an estimate. Andrew will confirm the total when he is active, then send a checkout link.';
 
 export function gbp(amount: number): string {
   const rounded = Math.round(amount * 100) / 100;
@@ -54,7 +54,7 @@ export function isHs2(spec: DroidSpec): boolean {
 }
 
 export function bbStyleAmount(countRaw: string): number {
-  const addons = livePrices().addons;
+  const {addons} = livePrices();
   const count = Number.parseInt(countRaw, 10);
   const extra = Number.isFinite(count) && count > 2
     ? (count - 2) * addons.bbExtraButton
@@ -75,66 +75,132 @@ export type QuoteResult = {
 
 export function quoteSpec(spec: DroidSpec): QuoteResult {
   const prices = livePrices();
-  const addons = prices.addons;
+  const {addons} = prices;
   const lines: QuoteLine[] = [
     {label: 'Base (8K, sticks, resin PlayStation buttons, OEM caps)', amount: prices.base},
   ];
   let total = prices.base;
   let hs2Ask = isHs2(spec);
 
-  if (spec.faces === FACE_XBOX_PS || spec.faces === FACE_XBOX_ABXY || spec.faces === FACE_XBOX_MEMBRANE) {
-    const faceLabel =
-      spec.faces === FACE_XBOX_ABXY
-        ? 'Xbox-shaped buttons with Xbox icons (ABXY)'
-        : 'Xbox-shaped buttons with PlayStation icons';
-    lines.push({label: faceLabel, amount: addons.xboxFaces});
-    total += addons.xboxFaces;
+  if (spec.faces === FACE_XBOX_PS || spec.faces === FACE_XBOX_ABXY || spec.faces === FACE_XBOX_MEMBRANE || spec.faces === 'faces-xbox-ps' || spec.faces === 'faces-xbox-abxy') {
+    const faceId = spec.faces === FACE_XBOX_ABXY || spec.faces === 'faces-xbox-abxy' ? 'faces-xbox-abxy' : 'faces-xbox-ps';
+    if (hasItem(faceId)) {
+      const row = liveItem(faceId);
+      const amount = row?.inBase ? 0 : (row?.priceGbp ?? addons.xboxFaces);
+      if (amount) {
+        const fallbackLabel = faceId === 'faces-xbox-abxy'
+          ? 'Xbox-shaped buttons with Xbox icons (ABXY)'
+          : 'Xbox-shaped buttons with PlayStation icons';
+        const faceLabel = row?.label ? row.label : fallbackLabel;
+        lines.push({label: faceLabel, amount});
+        total += amount;
+      }
+    }
+  }
+
+  function extraFor(id: string, fallback: number): number {
+    if (!hasItem(id)) {
+      return 0;
+    }
+
+    const row = liveItem(id);
+    if (row?.inBase) {
+      return 0;
+    }
+
+    return typeof row?.priceGbp === 'number' ? row.priceGbp : fallback;
   }
 
   if (isLeadjoyCap(spec.caps)) {
-    lines.push({label: spec.caps, amount: addons.leadjoyCaps});
-    total += addons.leadjoyCaps;
-  } else if (spec.caps.startsWith('DSE')) {
-    lines.push({label: 'DSE-style caps', amount: addons.dseCaps});
-    total += addons.dseCaps;
+    const amount = extraFor('caps-leadjoy', addons.leadjoyCaps);
+    if (amount) {
+      lines.push({label: spec.caps, amount});
+      total += amount;
+    }
+  } else if (spec.caps.startsWith('DSE') || spec.caps === 'caps-dse') {
+    const amount = extraFor('caps-dse', addons.dseCaps);
+    if (amount) {
+      lines.push({label: 'DSE-style caps', amount});
+      total += amount;
+    }
   }
 
   if (isGhost(spec)) {
-    lines.push({label: 'ExtremeRate Ghost', amount: addons.ghostShell});
-    total += addons.ghostShell;
-  } else if (spec.shell.startsWith('BO5')) {
-    lines.push({label: 'BO5 / themed shell', amount: addons.bo5Shell});
-    total += addons.bo5Shell;
-  } else if (spec.shell === SHELL_SOFT_TOUCH) {
-    lines.push({label: 'Soft Touch shell', amount: addons.softTouchShell});
-    total += addons.softTouchShell;
+    const amount = extraFor('shell-ghost', addons.ghostShell);
+    if (amount) {
+      lines.push({label: 'ExtremeRate Ghost', amount});
+      total += amount;
+    }
+  } else if (spec.shell.startsWith('BO5') || spec.shell === 'shell-bo5') {
+    const amount = extraFor('shell-bo5', addons.bo5Shell);
+    if (amount) {
+      lines.push({label: 'BO5 / themed shell', amount});
+      total += amount;
+    }
+  } else if (spec.shell === SHELL_SOFT_TOUCH || spec.shell === 'shell-soft') {
+    const amount = extraFor('shell-soft', addons.softTouchShell);
+    if (amount) {
+      lines.push({label: 'Soft Touch shell', amount});
+      total += amount;
+    }
   }
 
-  if (spec.backs.startsWith('DSE paddles')) {
-    lines.push({label: 'DSE paddles (2)', amount: addons.dsePaddles});
-    total += addons.dsePaddles;
+  if (spec.backs.startsWith('DSE paddles') || spec.backs === 'backs-dse') {
+    const amount = extraFor('backs-dse', addons.dsePaddles);
+    if (amount) {
+      lines.push({label: 'DSE paddles (2)', amount});
+      total += amount;
+    }
   } else if (isBb(spec)) {
-    const amount = bbStyleAmount(spec.bbCount);
+    const amount = extraFor('backs-bb', addons.bbStyleBacks)
+      + (Number.parseInt(spec.bbCount, 10) > 2
+        ? (Number.parseInt(spec.bbCount, 10) - 2) * extraFor('backs-bb-extra', addons.bbExtraButton)
+        : 0);
     const count = Number.parseInt(spec.bbCount, 10);
     const label = Number.isFinite(count) && count > 0
       ? `Battle Beaver style (${String(count)})`
       : 'Battle Beaver style';
-    lines.push({label, amount});
-    total += amount;
+    if (amount) {
+      lines.push({label, amount});
+      total += amount;
+    }
   }
 
-  if (spec.click === CLICK_FACES) {
-    lines.push({
-      label: 'Mouse click faces + triggers',
-      amount: addons.mouseClickFacesAndTriggers,
-    });
-    total += addons.mouseClickFacesAndTriggers;
-  } else if (spec.click.startsWith('Triggers + bumpers')) {
-    lines.push({
-      label: 'Mouse click triggers + bumpers',
-      amount: addons.mouseClickTriggers,
-    });
-    total += addons.mouseClickTriggers;
+  if (spec.click === CLICK_FACES || spec.click === 'click-faces') {
+    const amount = extraFor('click-faces', addons.mouseClickFacesAndTriggers);
+    if (amount) {
+      lines.push({label: 'Mouse click faces + triggers', amount});
+      total += amount;
+    }
+  } else if (spec.click.startsWith('Triggers + bumpers') || spec.click === 'click-triggers') {
+    const amount = extraFor('click-triggers', addons.mouseClickTriggers);
+    if (amount) {
+      lines.push({label: 'Mouse click triggers + bumpers', amount});
+      total += amount;
+    }
+  }
+
+  const customPicks = new Set([
+    spec.board,
+    spec.sticks,
+    spec.caps,
+    spec.shell,
+    spec.faces,
+    spec.backs,
+    spec.click,
+  ]);
+  for (const id of customPicks) {
+    if (!id.startsWith('extra-')) {
+      continue;
+    }
+
+    const row = liveItem(id);
+    if (!row || row.inBase || row.priceGbp === null || row.priceGbp === 0) {
+      continue;
+    }
+
+    lines.push({label: row.label, amount: row.priceGbp});
+    total += row.priceGbp;
   }
 
   for (const extra of prices.extras) {
@@ -144,7 +210,7 @@ export function quoteSpec(spec: DroidSpec): QuoteResult {
     }
   }
 
-  if (hs2Ask && prices.heliumGbp != null) {
+  if (hs2Ask && prices.heliumGbp !== null) {
     lines.push({label: 'HeliumStrike HS2 extra', amount: prices.heliumGbp});
     total += prices.heliumGbp;
     hs2Ask = false;
