@@ -27,6 +27,7 @@ export interface DroidSpec {
   shellNote: string;
   rear: string;
   faces: string;
+  facesNote: string;
   backs: string;
   click: string;
   shoulders: string;
@@ -40,8 +41,12 @@ export interface DroidSpec {
 
 export const CAPS_OEM = 'caps-oem';
 export const FACES_RESIN = 'faces-resin';
+export const FACES_COLOUR = 'faces-colour';
 export const CLICK_FACES = 'click-faces';
 export const BACKS_BB = 'backs-bb';
+
+/** Andrew fits 1 to 4 tactile back buttons, never more. */
+export const MAX_BB = 4;
 
 /** Not price desk rows. They let the customer clear an optional group. */
 export const TENSION_NONE = 'tension-none';
@@ -60,6 +65,7 @@ export function emptySpec(): DroidSpec {
     shellNote: '',
     rear: '',
     faces: '',
+    facesNote: '',
     backs: '',
     click: '',
     shoulders: '',
@@ -95,15 +101,11 @@ export function resetSpec(channelId: string): DroidSpec {
 }
 
 export function isBb(spec: DroidSpec): boolean {
-  return spec.backs === BACKS_BB;
+  return spec.backs === BACKS_BB || /^backs-bb-[1-4]$/.test(spec.backs);
 }
 
 export function isSoftTouch(spec: DroidSpec): boolean {
   return spec.shell === 'shell-soft';
-}
-
-export function isRearSoftTouch(spec: DroidSpec): boolean {
-  return spec.rear === 'rear-soft';
 }
 
 /** Themed shells are built to a photo, so the sheet asks for one. */
@@ -112,7 +114,48 @@ export function isBo5(spec: DroidSpec): boolean {
 }
 
 export function needsShellColour(spec: DroidSpec): boolean {
-  return isSoftTouch(spec) || isRearSoftTouch(spec);
+  return isSoftTouch(spec);
+}
+
+export function needsFacesColour(spec: DroidSpec): boolean {
+  return spec.faces === FACES_COLOUR;
+}
+
+/** Picks that only make sense once the customer has told us the colour. */
+export function needsColour(spec: DroidSpec): boolean {
+  return needsShellColour(spec) || needsFacesColour(spec);
+}
+
+export function colourButtonLabel(spec: DroidSpec): string {
+  if (needsShellColour(spec) && needsFacesColour(spec)) {
+    return 'Colours';
+  }
+
+  return needsFacesColour(spec) ? 'Button colour' : 'Shell colour';
+}
+
+/** Drops any colour we asked for once the pick that needed it is gone. */
+export function syncColourNotes(spec: DroidSpec): void {
+  if (!needsShellColour(spec)) {
+    spec.shellNote = '';
+  }
+
+  if (!needsFacesColour(spec)) {
+    spec.facesNote = '';
+  }
+}
+
+export function missingColour(spec: DroidSpec): string[] {
+  const missing: string[] = [];
+  if (needsShellColour(spec) && !spec.shellNote) {
+    missing.push('shell colour');
+  }
+
+  if (needsFacesColour(spec) && !spec.facesNote) {
+    missing.push('button colour');
+  }
+
+  return missing;
 }
 
 export function isGhost(spec: DroidSpec): boolean {
@@ -134,14 +177,26 @@ export function hasPhoto(spec: DroidSpec, kind: PhotoKind): boolean {
   return spec.photos.some(photo => photo.kind === kind);
 }
 
-export function syncBbSlots(spec: DroidSpec): void {
+/** Clamps to 1 to 4, so an older spec asking for more is corrected, not priced. */
+export function bbCount(spec: DroidSpec): number {
   const count = Number.parseInt(spec.bbCount, 10);
   if (!Number.isFinite(count) || count < 1) {
+    return 0;
+  }
+
+  return Math.min(count, MAX_BB);
+}
+
+export function syncBbSlots(spec: DroidSpec): void {
+  const count = bbCount(spec);
+  if (count === 0) {
     spec.bbSlots = [];
     spec.bbCursor = 0;
+    spec.bbCount = '';
     return;
   }
 
+  spec.bbCount = String(count);
   spec.bbSlots = spec.bbSlots.slice(0, count);
   while (spec.bbSlots.length < count) {
     spec.bbSlots.push({height: '', side: 'Left'});
@@ -196,6 +251,7 @@ export function placementLine(spec: DroidSpec): string {
   }
 
   return spec.bbSlots
+    .slice(0, MAX_BB)
     .map((slot, index) => {
       const mark = slot.height ? `${slot.height} · ${slot.side}` : 'not set';
       return `**${index + 1}.** ${mark}`;
@@ -228,7 +284,8 @@ function pick(spec: DroidSpec, field: keyof DroidSpec, label: string): string {
 }
 
 export function specText(spec: DroidSpec): string {
-  const colour = spec.shellNote ? ` (${spec.shellNote})` : '';
+  const shellColour = spec.shellNote ? ` (${spec.shellNote})` : '';
+  const facesColour = spec.facesNote ? ` (${spec.facesNote})` : '';
   const lines = [
     buildLine(spec),
     boardLine(spec),
@@ -241,15 +298,16 @@ export function specText(spec: DroidSpec): string {
   }
 
   lines.push(
-    `${pick(spec, 'shell', 'Front shell')}${isSoftTouch(spec) ? colour : ''}`,
-    `${pick(spec, 'rear', 'Rear shell')}${isRearSoftTouch(spec) ? colour : ''}`,
-    pick(spec, 'faces', 'Face buttons'),
+    `${pick(spec, 'shell', 'Front shell')}${needsShellColour(spec) ? shellColour : ''}`,
+    pick(spec, 'rear', 'Rear shell'),
+    `${pick(spec, 'faces', 'Face buttons')}${needsFacesColour(spec) ? facesColour : ''}`,
     pick(spec, 'click', 'Button style'),
     pick(spec, 'backs', 'Back buttons'),
   );
 
   if (isBb(spec)) {
-    lines.push(`**How many:** ${spec.bbCount || 'not set'}`);
+    const count = bbCount(spec);
+    lines.push(`**How many:** ${count > 0 ? String(count) : 'not set'}`);
     lines.push(placementLine(spec));
   }
 

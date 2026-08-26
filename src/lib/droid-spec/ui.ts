@@ -28,16 +28,23 @@ import {
 import {
   CLICK_FACES,
   FACES_RESIN,
+  MAX_BB,
   SHOULDERS_NONE,
   TENSION_NONE,
+  BACKS_BB,
   type DroidSpec,
   type PhotoKind,
   type SpecPage,
+  bbCount,
+  colourButtonLabel,
   hasPhoto,
   isBb,
   isBo5,
   isGhost,
   lockGhostCaps,
+  missingColour,
+  needsColour,
+  needsFacesColour,
   needsShellColour,
   specText,
 } from './state.js';
@@ -58,7 +65,7 @@ const OPTION_NOTES: Record<string, string> = {
   'shell-soft': 'Pick it, then tap Shell colour and type the colour',
   'shell-bo5': 'Add a photo of the shell you want',
   'shell-ghost': 'OEM caps only. Leadjoy Magic does not fit',
-  'rear-soft': 'Pick it, then tap Shell colour and type the colour',
+  'faces-colour': 'Pick it, then tap Button colour and type the colour',
   'faces-resin': 'Resin PlayStation icons. Needed for the clicky full kit',
   'click-faces': 'Faces, bumpers and triggers. Comes with resin buttons',
   'backs-bb': 'Tactile. You set the height and side for each one',
@@ -96,6 +103,27 @@ function groupOpts(group: string, drop: string[] = []): SelectOpt[] {
   return liveGroup(group)
     .filter(item => !skip.has(item.id))
     .map(item => toOpt(item));
+}
+
+const BB_QTY_IDS = ['backs-bb-1', 'backs-bb-2', 'backs-bb-3', 'backs-bb-4', 'backs-bb-extra'];
+
+/** Qty rows are priced on the how-many page, so they stay off this picker. */
+function backOpts(): SelectOpt[] {
+  const opts = groupOpts('backs', BB_QTY_IDS);
+  const hasTactile = liveGroup('backs').some(item => /^backs-bb-[1-4]$/.test(item.id) || item.id === BACKS_BB);
+  if (!hasTactile) {
+    return opts;
+  }
+
+  return [
+    {
+      label: priced('Tactile Battle Beaver style', plusLabel(bbStyleAmount('2'))),
+      value: BACKS_BB,
+      description: OPTION_NOTES[BACKS_BB],
+      order: 1,
+    },
+    ...opts,
+  ];
 }
 
 function selectRow(
@@ -258,6 +286,23 @@ export function startFiles() {
   return [bannerFile()];
 }
 
+function colourFieldValue(spec: DroidSpec): string {
+  const lines: string[] = [];
+  if (needsShellColour(spec)) {
+    lines.push(spec.shellNote ? `Shell colour: **${spec.shellNote}**` : 'Shell colour: **not set**');
+  }
+
+  if (needsFacesColour(spec)) {
+    lines.push(spec.facesNote ? `Button colour: **${spec.facesNote}**` : 'Button colour: **not set**');
+  }
+
+  const missing = missingColour(spec);
+  lines.push(missing.length === 0
+    ? 'Andrew builds to these colours. Tap the button again to change them.'
+    : `Tap **${colourButtonLabel(spec)}** and type the ${missing.join(' and ')}.`);
+  return lines.join('\n');
+}
+
 export function wizardEmbed(spec: DroidSpec): EmbedBuilder {
   const {step, total, title} = stepMeta(spec);
   const quote = quoteSpec(spec);
@@ -284,9 +329,12 @@ export function wizardEmbed(spec: DroidSpec): EmbedBuilder {
 
   if (spec.page === 'bb') {
     const current = spec.bbSlots[spec.bbCursor];
+    const count = bbCount(spec);
     const n = spec.bbCursor + 1;
     embed.addFields({
-      name: spec.bbCount ? `Tick button ${String(n)} of ${spec.bbCount}` : 'How many buttons?',
+      name: count > 0
+        ? `Tick button ${String(n)} of ${String(count)}`
+        : `How many buttons? (1 to ${String(MAX_BB)})`,
       value: current?.height
         ? `This button: ${current.height} · ${current.side}`
         : 'Pick a height and side for this button. Tactile, Battle Beaver style: each button gets its own spot.',
@@ -301,12 +349,10 @@ export function wizardEmbed(spec: DroidSpec): EmbedBuilder {
     });
   }
 
-  if (spec.page === 'look' && needsShellColour(spec)) {
+  if (spec.page === 'look' && needsColour(spec)) {
     embed.addFields({
-      name: 'Soft touch colour',
-      value: spec.shellNote
-        ? `Colour: ${spec.shellNote}. You can add a shell photo on the photo step.`
-        : 'Tap **Shell colour** and type the colour you want.',
+      name: 'Colours',
+      value: colourFieldValue(spec),
     });
   }
 
@@ -358,9 +404,12 @@ function navRow(spec: DroidSpec): ActionRowBuilder<ButtonBuilder> {
     .setDisabled(pages.indexOf(spec.page) <= 0);
   const buttons = [back];
 
-  if (spec.page === 'look' && needsShellColour(spec)) {
+  if (spec.page === 'look' && needsColour(spec)) {
     buttons.push(
-      new ButtonBuilder().setCustomId(`${SPEC_PREFIX}shellnote`).setLabel('Shell colour').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`${SPEC_PREFIX}shellnote`)
+        .setLabel(colourButtonLabel(spec))
+        .setStyle(missingColour(spec).length === 0 ? ButtonStyle.Secondary : ButtonStyle.Primary),
     );
   }
 
@@ -427,8 +476,7 @@ function modsRows(spec: DroidSpec): any[] {
   const shoulderOpts = groupOpts('shoulders');
   return withNav(spec, [
     groupRow('click', 'Button style', groupOpts('click'), spec.click),
-    // The backs-bb-extra row prices each extra button, it is not a pick.
-    groupRow('backs', 'Back buttons', groupOpts('backs', ['backs-bb-extra']), spec.backs),
+    groupRow('backs', 'Back buttons', backOpts(), isBb(spec) ? BACKS_BB : spec.backs),
     shoulderOpts.length === 0
       ? null
       : groupRow('shoulders', 'Shoulder buttons', [
@@ -441,6 +489,18 @@ function modsRows(spec: DroidSpec): any[] {
 
 const HEIGHTS = ['High', 'Medium', 'Standard', 'Buster\'s', 'Low', 'Lower'] as const;
 const SIDES = ['Left', 'Right'] as const;
+
+function countOpts(): SelectOpt[] {
+  const opts: SelectOpt[] = [];
+  for (let count = 1; count <= MAX_BB; count++) {
+    opts.push({
+      label: priced(count === 1 ? '1 button' : `${String(count)} buttons`, plusLabel(bbStyleAmount(String(count)))),
+      value: String(count),
+    });
+  }
+
+  return opts;
+}
 
 function bbRows(spec: DroidSpec): any[] {
   const current = spec.bbSlots[spec.bbCursor];
@@ -455,19 +515,20 @@ function bbRows(spec: DroidSpec): any[] {
     }
   }
 
+  const count = bbCount(spec);
   return [
-    selectRow(`${SPEC_PREFIX}bbcount`, spec.bbCount ? `${spec.bbCount} buttons` : 'How many buttons? (1 to 8)', (
-      [1, 2, 3, 4, 5, 6, 7, 8] as const
-    ).map(count => ({
-      label: priced(String(count), plusLabel(bbStyleAmount(String(count)))),
-      value: String(count),
-    })), spec.bbCount),
+    selectRow(
+      `${SPEC_PREFIX}bbcount`,
+      count > 0 ? `${String(count)} of ${String(MAX_BB)}` : `How many buttons? (1 to ${String(MAX_BB)})`,
+      countOpts(),
+      count > 0 ? String(count) : undefined,
+    ),
     selectRow(
       `${SPEC_PREFIX}bbplace`,
       selected ? selected.replace('|', ' · ') : `Button ${String(spec.bbCursor + 1)} placement`,
       placeOpts,
       selected,
-      !spec.bbCount,
+      count === 0,
     ),
     navRow(spec),
   ];

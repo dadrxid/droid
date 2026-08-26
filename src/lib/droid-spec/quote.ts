@@ -10,6 +10,8 @@ import {
 import {
   CLICK_FACES,
   FACES_RESIN,
+  MAX_BB,
+  bbCount,
   isBb,
   isGhost,
   isLeadjoyCap,
@@ -49,8 +51,8 @@ function fallbackAmount(id: string): number {
     'shell-soft': addons.softTouchShell,
     'shell-bo5': addons.bo5Shell,
     'shell-ghost': addons.ghostShell,
-    'rear-soft': addons.rearSoftTouch,
-    'rear-splatter': addons.rearSplatter,
+    'rear-splatter-black': addons.rearSplatter,
+    'rear-splatter-white': addons.rearSplatter,
     'faces-colour': addons.colouredFaces,
     'faces-resin': addons.resinFaces,
     'faces-xbox-ps': addons.xboxFaces,
@@ -58,8 +60,10 @@ function fallbackAmount(id: string): number {
     'click-triggers': addons.mouseClickTriggers,
     'click-bumpers': addons.mouseClickBumpersAndTriggers,
     'click-faces': addons.mouseClickFacesAndTriggers,
-    'backs-bb': addons.bbStyleBacks,
-    'backs-bb-extra': addons.bbExtraButton,
+    'backs-bb-1': addons.bb1,
+    'backs-bb-2': addons.bb2,
+    'backs-bb-3': addons.bb3,
+    'backs-bb-4': addons.bb4,
     'backs-dse': addons.dsePaddles,
     'tension-20': addons.tension20,
     'tension-40': addons.tension40,
@@ -103,12 +107,15 @@ function amountFor(id: string): number {
   return lineFor(id)?.amount ?? 0;
 }
 
+/** L1mit qty table: 1, 2, 3 or 4 buttons, never more. */
 export function bbStyleAmount(countRaw: string): number {
-  const count = Number.parseInt(countRaw, 10);
-  const extra = Number.isFinite(count) && count > 2
-    ? (count - 2) * amountFor('backs-bb-extra')
-    : 0;
-  return amountFor('backs-bb') + extra;
+  const parsed = Number.parseInt(countRaw, 10);
+  const count = Number.isFinite(parsed) ? Math.min(Math.max(parsed, 0), MAX_BB) : 0;
+  if (count < 1) {
+    return 0;
+  }
+
+  return amountFor(`backs-bb-${String(count)}`);
 }
 
 /** The build itself. Always one line, defaulting to the normal in house build. */
@@ -161,17 +168,16 @@ function backsLine(spec: DroidSpec): QuoteLine | null {
     return lineFor(spec.backs);
   }
 
-  const base = lineFor('backs-bb');
-  if (!base) {
+  const count = bbCount(spec);
+  const id = count > 0 ? `backs-bb-${String(count)}` : 'backs-bb-2';
+  const line = lineFor(id);
+  if (!line) {
     return null;
   }
 
-  const count = Number.parseInt(spec.bbCount, 10);
-  const counted = Number.isFinite(count) && count > 0;
-  const extra = counted && count > 2 ? (count - 2) * amountFor('backs-bb-extra') : 0;
   return {
-    label: counted ? `${base.label} · ${String(count)} fitted` : base.label,
-    amount: base.amount + extra,
+    label: count > 0 ? `${line.label} · ${String(count)} fitted` : line.label,
+    amount: line.amount,
   };
 }
 

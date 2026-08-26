@@ -20,12 +20,18 @@ import {isImageMessage, photoAttachments, storeChannelPhoto} from './photos.js';
 import {
   CLICK_FACES,
   FACES_RESIN,
+  BACKS_BB,
   applyBbPick,
+  colourButtonLabel,
   getSpec,
   isBb,
   lockGhostCaps,
+  missingColour,
+  needsColour,
+  needsFacesColour,
   needsShellColour,
   resetSpec,
+  syncColourNotes,
   syncBbSlots,
   type DroidSpec,
   type PhotoKind,
@@ -90,11 +96,51 @@ function guardOwner(
   return false;
 }
 
-function applyShellPick(spec: DroidSpec): void {
-  if (!needsShellColour(spec)) {
-    spec.shellNote = '';
+const SHELL_NOTE_FIELD = 'shellnote';
+const FACES_NOTE_FIELD = 'facesnote';
+
+function colourInput(id: string, label: string, value: string, placeholder: string) {
+  const input = new TextInputBuilder()
+    .setCustomId(id)
+    .setLabel(label)
+    .setStyle(TextInputStyle.Short)
+    .setRequired(false)
+    .setMaxLength(80)
+    .setPlaceholder(placeholder);
+  if (value) {
+    input.setValue(value);
   }
 
+  return new ActionRowBuilder<TextInputBuilder>().addComponents(input);
+}
+
+/** One prompt for every colour this build needs. Two inputs at most, so it fits. */
+function colourModal(spec: DroidSpec): ModalBuilder {
+  const modal = new ModalBuilder()
+    .setCustomId('droidspec:modalcolour')
+    .setTitle(colourButtonLabel(spec));
+  if (needsShellColour(spec)) {
+    modal.addComponents(
+      colourInput(SHELL_NOTE_FIELD, 'Soft touch shell colour', spec.shellNote, 'e.g. mint'),
+    );
+  }
+
+  if (needsFacesColour(spec)) {
+    modal.addComponents(
+      colourInput(FACES_NOTE_FIELD, 'Face button colour', spec.facesNote, 'e.g. red, or red and white'),
+    );
+  }
+
+  return modal;
+}
+
+/** The modal only carries the inputs that applied, so read them defensively. */
+function modalValue(interaction: ModalSubmitInteraction, id: string): string {
+  return interaction.fields.fields.get(id)?.value.trim() ?? '';
+}
+
+function applyShellPick(spec: DroidSpec): void {
+  syncColourNotes(spec);
   lockGhostCaps(spec);
 }
 
@@ -123,18 +169,27 @@ const SELECT_HANDLERS: Record<string, SelectHandler> = {
   },
   'droidspec:rear': (spec, value) => {
     spec.rear = value;
-    applyShellPick(spec);
   },
   'droidspec:faces': (spec, value) => {
     spec.faces = value;
+    syncColourNotes(spec);
   },
   'droidspec:click': (spec, value) => {
     spec.click = value;
     if (value === CLICK_FACES && hasItem(FACES_RESIN)) {
       spec.faces = FACES_RESIN;
+      syncColourNotes(spec);
     }
   },
   'droidspec:backs': (spec, value) => {
+    const qty = /^backs-bb-([1-4])$/.exec(value);
+    if (qty) {
+      spec.backs = BACKS_BB;
+      spec.bbCount = qty[1];
+      syncBbSlots(spec);
+      return;
+    }
+
     spec.backs = value;
     if (isBb(spec)) {
       syncBbSlots(spec);
@@ -274,33 +329,28 @@ export async function handleSpecButton(interaction: ButtonInteraction): Promise<
   }
 
   if (interaction.customId === 'droidspec:shellnote') {
-    if (!needsShellColour(spec)) {
+    if (!needsColour(spec)) {
       await interaction.reply({
-        content: 'Shell colour is only for the premium soft touch shells. Themed shells need a photo instead.',
+        content: 'Nothing on this build needs a colour yet. Pick a soft touch shell or coloured buttons first.',
         ephemeral: true,
       });
       return;
     }
 
-    const modal = new ModalBuilder()
-      .setCustomId('droidspec:modalshell')
-      .setTitle('Shell colour')
-      .addComponents(
-        new ActionRowBuilder<TextInputBuilder>().addComponents(
-          new TextInputBuilder()
-            .setCustomId('note')
-            .setLabel('Colour or description')
-            .setStyle(TextInputStyle.Short)
-            .setRequired(false)
-            .setMaxLength(80)
-            .setPlaceholder('e.g. mint'),
-        ),
-      );
-    await interaction.showModal(modal as never);
+    await interaction.showModal(colourModal(spec) as never);
     return;
   }
 
   if (interaction.customId === 'droidspec:submit') {
+    const missing = missingColour(spec);
+    if (missing.length > 0) {
+      await interaction.reply({
+        content: `Andrew needs the ${missing.join(' and ')} first. Tap **Prev** back to the shells page, then tap **${colourButtonLabel(spec)}**.`,
+        ephemeral: true,
+      });
+      return;
+    }
+
     const ownerId = getBotOwnerId();
     const quote = quoteSpec(spec);
     const files: AttachmentBuilder[] = [taglineFile(), ...photoAttachments(spec.photos)];
@@ -333,18 +383,21 @@ export async function handleSpecModal(interaction: ModalSubmitInteraction): Prom
     return;
   }
 
-  spec.shellNote = interaction.fields.getTextInputValue('note').trim();
-  if (!needsShellColour(spec)) {
-    spec.shellNote = '';
-    await interaction.reply({
-      content: 'Shell colour is only for the premium soft touch shells.',
-      ephemeral: true,
-    });
-    return;
+  if (needsShellColour(spec)) {
+    spec.shellNote = modalValue(interaction, SHELL_NOTE_FIELD);
   }
 
+  if (needsFacesColour(spec)) {
+    spec.facesNote = modalValue(interaction, FACES_NOTE_FIELD);
+  }
+
+  syncColourNotes(spec);
+  const saved = [
+    spec.shellNote ? `shell ${spec.shellNote}` : '',
+    spec.facesNote ? `buttons ${spec.facesNote}` : '',
+  ].filter(Boolean);
   await interaction.reply({
-    content: spec.shellNote ? `Shell colour saved: ${spec.shellNote}` : 'Shell colour cleared.',
+    content: saved.length > 0 ? `Colour saved: ${saved.join(', ')}.` : 'Colour cleared.',
     ephemeral: true,
   });
 }
