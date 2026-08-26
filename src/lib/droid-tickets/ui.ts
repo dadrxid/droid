@@ -4,6 +4,7 @@ import {
   ButtonStyle,
   EmbedBuilder,
 } from 'discord.js';
+import {branded} from '../droid-brand.js';
 import type {TicketField, TicketKind, TicketRecord} from './store.js';
 
 export const BRAND_BLUE = 0x0088ff;
@@ -14,28 +15,28 @@ export const KIND_LABELS: Record<TicketKind, string> = {
   repair: 'Repair',
 };
 
-export function panelEmbed(): EmbedBuilder {
-  return new EmbedBuilder()
+export function panelEmbed(emoji: string, logo?: string): EmbedBuilder {
+  const embed = new EmbedBuilder()
     .setColor(BRAND_BLUE)
-    .setTitle('DROIDFIX')
+    .setTitle(branded(emoji, 'DroidFix tickets'))
     .setDescription([
-      'Pick a button below and fill the short form. Your private ticket opens once the form is sent.',
+      'Pick a button and fill in the short form. Your private ticket opens straight after.',
       '',
-      '**Custom build** · a custom 8K PlayStation-style pad. Shells, paddles, caps, mouse click.',
-      '**Repair** · stick drift, dead buttons, charging, mail-in from anywhere in the UK.',
-      '',
-      'Only you and the DroidFix team can see your ticket.',
+      '**Custom build** · instant price on your spec. Built and shipped in house, 4 to 6 weeks.',
+      '**Repair** · stick drift, dead buttons, charging. UK mail-in only.',
     ].join('\n'))
-    .setFooter({text: 'droidfix.uk · Middlesbrough'});
+    .setFooter({text: 'droidfix.uk · only you and the DroidFix team can see your ticket'});
+
+  return logo ? embed.setThumbnail(logo) : embed;
 }
 
-export function panelRows(): any[] {
+export function panelRows(emoji: string): any[] {
   return [
     new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId('dt:new:custom')
         .setLabel('Custom build')
-        .setEmoji('🎮')
+        .setEmoji(emoji ? emoji : '🎮')
         .setStyle(ButtonStyle.Primary),
       new ButtonBuilder()
         .setCustomId('dt:new:repair')
@@ -46,44 +47,48 @@ export function panelRows(): any[] {
   ];
 }
 
-export function welcomeEmbed(kind: TicketKind, openerId: string, staffRoleId: string): EmbedBuilder {
-  const lines = [
-    `Thanks <@${openerId}>. This is your private ${KIND_LABELS[kind].toLowerCase()} ticket.`,
-    '',
-    staffRoleId
-      ? `${`<@&${staffRoleId}>`} will be with you as soon as they can. Andrew is a one-man workshop with a day job, so it can be a few hours.`
-      : 'Andrew will be with you as soon as he can. One-man workshop, so it can be a few hours.',
-    'Leave everything you can here and it gets sorted faster. Photos help a lot.',
-  ];
+/** One tidy embed: greeting, the ground rules for that ticket type, and the form answers. */
+export function welcomeEmbed(options: {
+  kind: TicketKind;
+  id: string;
+  openerId: string;
+  staffRoleId: string;
+  fields: TicketField[];
+  emoji: string;
+  logo?: string;
+}): EmbedBuilder {
+  const {kind, id, openerId, staffRoleId, fields, emoji, logo} = options;
+  const staff = staffRoleId ? `<@&${staffRoleId}>` : 'Andrew';
 
-  if (kind === 'custom') {
-    lines.push('', 'Use the build sheet below to pick your parts. The prices update live from the workshop list.');
-  } else {
-    lines.push('', 'Post a photo or a short clip of the fault if you can.');
-  }
+  const lines = kind === 'custom'
+    ? [
+      `Thanks <@${openerId}>. Pick your parts on the build sheet below and the price updates as you go.`,
+      '',
+      'Built and shipped in house · 4 to 6 weeks, sometimes sooner · UK postage included.',
+      `${staff} confirms the final total and can sort anything else in here.`,
+    ]
+    : [
+      `Thanks <@${openerId}>. Post a photo or a short clip of the fault when you can.`,
+      '',
+      'UK mail-in only.',
+      `${staff} will send you the postage details in here.`,
+    ];
 
-  lines.push('', 'Press **Close** when you are done.');
-
-  return new EmbedBuilder()
-    .setColor(BRAND_BLUE)
-    .setTitle(`${KIND_LABELS[kind]} ticket`)
-    .setDescription(lines.join('\n'));
-}
-
-export function answersEmbed(id: string, fields: TicketField[]): EmbedBuilder {
   const embed = new EmbedBuilder()
     .setColor(BRAND_BLUE)
-    .setTitle(`Form answers · ${id}`);
-
-  if (fields.length === 0) {
-    return embed.setDescription('No answers given.');
-  }
+    .setTitle(branded(emoji, `${KIND_LABELS[kind]} · ${id}`))
+    .setDescription(lines.join('\n'))
+    .setFooter({text: 'droidfix.uk · press Close when you are finished'});
 
   for (const field of fields) {
-    embed.addFields({name: field.label.slice(0, 256), value: field.value.slice(0, 1024)});
+    embed.addFields({
+      name: field.label.slice(0, 256),
+      value: field.value.slice(0, 1024),
+      inline: field.value.length <= 40,
+    });
   }
 
-  return embed;
+  return logo ? embed.setThumbnail(logo) : embed;
 }
 
 export function openControlsRow(): any {

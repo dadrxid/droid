@@ -21,9 +21,9 @@ import {
   type TicketKind,
   type TicketRecord,
 } from './store.js';
+import {brandEmoji, brandLogo} from '../droid-brand.js';
 import {
   KIND_LABELS,
-  answersEmbed,
   closedEmbed,
   directLinkRow,
   logEmbed,
@@ -186,7 +186,15 @@ export async function createTicket(options: {
 
   const intro = await channel.send({
     content: settings.staffRoleId ? `<@${opener.id}> · <@&${settings.staffRoleId}>` : `<@${opener.id}>`,
-    embeds: [welcomeEmbed(kind, opener.id, settings.staffRoleId), answersEmbed(id, fields)],
+    embeds: [welcomeEmbed({
+      kind,
+      id,
+      openerId: opener.id,
+      staffRoleId: settings.staffRoleId,
+      fields,
+      emoji: brandEmoji(guild),
+      logo: brandLogo(guild),
+    })],
     components: [openControlsRow()],
     allowedMentions: {
       users: [opener.id],

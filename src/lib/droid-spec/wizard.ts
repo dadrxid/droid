@@ -12,6 +12,7 @@ import {
   type TextBasedChannel,
 } from 'discord.js';
 import {getBotOwnerId} from '../../utils/require-guild-admin.js';
+import {brandEmoji} from '../droid-brand.js';
 import {taglineFile} from './assets.js';
 import {refreshLivePrices} from './menu.js';
 import {quoteSpec} from './quote.js';
@@ -107,9 +108,10 @@ export async function postSpecStarter(channel: TextBasedChannel): Promise<void> 
 
   resetSpec(channel.id);
   await refreshLivePrices();
+  const emoji = brandEmoji('guild' in channel ? channel.guild : undefined);
   const message = await channel.send({
-    embeds: [startEmbed()],
-    components: startRows(),
+    embeds: [startEmbed(emoji)],
+    components: startRows(emoji),
     files: startFiles(),
   });
   getSpec(channel.id).startMessageId = message.id;

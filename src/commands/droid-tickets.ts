@@ -11,6 +11,7 @@ import {
 import {injectable} from 'inversify';
 import Command from './index.js';
 import {requireGuildAdministrator} from '../utils/require-guild-admin.js';
+import {brandEmoji, brandLogo} from '../lib/droid-brand.js';
 import {postSpecStarter} from '../lib/droid-spec/wizard.js';
 import {readTicketForm, ticketModal} from '../lib/droid-tickets/forms.js';
 import {
@@ -352,8 +353,13 @@ export default class implements Command {
       return;
     }
 
+    const emoji = brandEmoji(interaction.guild);
+
     try {
-      await target.send({embeds: [panelEmbed()], components: panelRows()});
+      await target.send({
+        embeds: [panelEmbed(emoji, brandLogo(interaction.guild))],
+        components: panelRows(emoji),
+      });
     } catch {
       await interaction.reply({
         content: `I cannot post in <#${target.id}>. Give me View Channel, Send Messages and Embed Links there.`,

@@ -82,6 +82,13 @@ function money(items: ApiItem[], id: string, fallback: number): number {
 function mapPrices(payload: {postageNote?: string; items?: ApiItem[]}): LivePrices {
   const items = Array.isArray(payload.items) ? payload.items : [];
   const heliumRow = items.find(item => item.id === 'helium-hs2');
+
+  // The base row is flagged inBase, so money() would zero it like an included
+  // add-on. Read its price straight off the row instead.
+  const baseRow = items.find(item => item.id === 'base');
+  const base = typeof baseRow?.priceGbp === 'number' && baseRow.priceGbp > 0
+    ? baseRow.priceGbp
+    : FALLBACK_PRICES.base;
   const mappedItems: LiveItem[] = items
     .filter((row): row is ApiItem & {id: string} => typeof row.id === 'string' && row.id.length > 0)
     .map((row, index) => ({
@@ -97,7 +104,7 @@ function mapPrices(payload: {postageNote?: string; items?: ApiItem[]}): LivePric
 
   return {
     live: true,
-    base: money(items, 'base', FALLBACK_PRICES.base),
+    base,
     heliumGbp: typeof heliumRow?.priceGbp === 'number' ? heliumRow.priceGbp : null,
     postageNote: payload.postageNote ? payload.postageNote : FALLBACK_PRICES.postageNote,
     extras: mappedItems

@@ -6,6 +6,7 @@ import {
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
 } from 'discord.js';
+import {branded} from '../droid-brand.js';
 import {BANNER_NAME, PLACEMENT_NAME, TAGLINE_NAME, bannerFile, placementFile} from './assets.js';
 import {hasItem, liveItem, livePrices} from './menu.js';
 import {
@@ -146,29 +147,29 @@ function stepMeta(spec: DroidSpec): {step: number; total: number; title: string}
   return {step: total, total, title: 'Add photos. Paste them into this ticket.'};
 }
 
-export function startEmbed(): EmbedBuilder {
+export function startEmbed(emoji = ''): EmbedBuilder {
   return new EmbedBuilder()
     .setColor(BRAND_BLUE)
-    .setTitle('Droid Rollers')
+    .setTitle(branded(emoji, 'Droid Rollers build sheet'))
     .setDescription(
       [
-        `Custom 8K build spec. From ${gbp(livePrices().base)}.`,
-        'Tap **Start build spec**. Only you will see the form until you submit.',
-        'The total at the end is an estimate. Andrew confirms it when he is active.',
-        'UK tracked postage is included.',
-        'Shoulder buttons (L1 / R1) are not on this form. Ask Andrew if you want a set.',
+        `Custom 8K pads from **${gbp(livePrices().base)}**. Tap below and pick your parts.`,
+        'Only you see the sheet until you submit. The price updates as you go.',
       ].join('\n'),
     )
     .setImage(`attachment://${BANNER_NAME}`)
-    .setFooter({text: '8K custom boards only. Not a stock PS4 board.'});
+    .setFooter({
+      text: '8K custom boards only · estimate until Andrew confirms · shoulder buttons on request',
+    });
 }
 
-export function startRows(): any[] {
+export function startRows(emoji = ''): any[] {
   return [
     new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId(`${SPEC_PREFIX}start`)
-        .setLabel('Start build spec')
+        .setLabel('Start build sheet')
+        .setEmoji(emoji ? emoji : '🎮')
         .setStyle(ButtonStyle.Primary),
     ),
   ];
