@@ -82,7 +82,11 @@ function mapPrices(payload: {postageNote?: string; items?: ApiItem[]}): LivePric
       bbExtraButton: money(items, "backs-bb-extra", FALLBACK_PRICES.addons.bbExtraButton),
       leadjoyCaps: money(items, "caps-leadjoy", FALLBACK_PRICES.addons.leadjoyCaps),
       dseCaps: money(items, "caps-dse", FALLBACK_PRICES.addons.dseCaps),
-      xboxFaces: money(items, "faces-xbox", FALLBACK_PRICES.addons.xboxFaces),
+      xboxFaces: money(
+        items,
+        "faces-xbox-ps",
+        money(items, "faces-xbox-abxy", money(items, "faces-xbox", FALLBACK_PRICES.addons.xboxFaces)),
+      ),
     },
   };
 }

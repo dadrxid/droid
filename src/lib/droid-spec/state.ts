@@ -32,7 +32,9 @@ export interface DroidSpec {
   startMessageId: string;
 }
 
-export const FACE_DROID_ROLLERS_STANDARD = 'Droid Rollers Standard (resin · mouse click)';
+export const FACE_DROID_ROLLERS_STANDARD = 'Droid Rollers Standard (resin PlayStation icons)';
+export const FACE_XBOX_PS = 'Xbox shape · PlayStation icons';
+export const FACE_XBOX_ABXY = 'Xbox shape · Xbox icons (ABXY)';
 export const FACE_XBOX_MEMBRANE = 'Xbox style (membrane only)';
 export const FACE_STOCK_MEMBRANE = 'Stock (membrane only)';
 export const FACE_STOCK_WHITE_MEMBRANE = 'Stock white (membrane only)';

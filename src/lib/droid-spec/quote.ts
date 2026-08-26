@@ -1,7 +1,9 @@
 import {livePrices} from './menu.js';
 import {
   CLICK_FACES,
+  FACE_XBOX_ABXY,
   FACE_XBOX_MEMBRANE,
+  FACE_XBOX_PS,
   SHELL_SOFT_TOUCH,
   isBb,
   isGhost,
@@ -75,13 +77,17 @@ export function quoteSpec(spec: DroidSpec): QuoteResult {
   const prices = livePrices();
   const addons = prices.addons;
   const lines: QuoteLine[] = [
-    {label: 'Base (8K, sticks, resin ABXY, OEM caps)', amount: prices.base},
+    {label: 'Base (8K, sticks, resin PlayStation buttons, OEM caps)', amount: prices.base},
   ];
   let total = prices.base;
   let hs2Ask = isHs2(spec);
 
-  if (spec.faces === FACE_XBOX_MEMBRANE) {
-    lines.push({label: 'Xbox-style buttons', amount: addons.xboxFaces});
+  if (spec.faces === FACE_XBOX_PS || spec.faces === FACE_XBOX_ABXY || spec.faces === FACE_XBOX_MEMBRANE) {
+    const faceLabel =
+      spec.faces === FACE_XBOX_ABXY
+        ? 'Xbox-shaped buttons with Xbox icons (ABXY)'
+        : 'Xbox-shaped buttons with PlayStation icons';
+    lines.push({label: faceLabel, amount: addons.xboxFaces});
     total += addons.xboxFaces;
   }
 
