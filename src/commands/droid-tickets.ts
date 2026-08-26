@@ -81,7 +81,11 @@ export default class implements Command {
         .setRequired(false)))
     .addSubcommand(subcommand => subcommand
       .setName('panel')
-      .setDescription('Post the Create ticket panel in this channel (Admin only)'))
+      .setDescription('Post the Create ticket panel (Admin only)')
+      .addChannelOption(option => option
+        .setName('channel')
+        .setDescription('Where the ticket buttons go (default: this channel)')
+        .setRequired(false)))
     .addSubcommand(subcommand => subcommand
       .setName('status')
       .setDescription('Show the current ticket settings (Admin only)'))
@@ -323,8 +327,19 @@ export default class implements Command {
   }
 
   private async runPanel(interaction: ChatInputCommandInteraction): Promise<void> {
-    if (!interaction.channel?.isTextBased() || !('send' in interaction.channel)) {
-      await interaction.reply({content: 'Use this in a normal text channel.', ephemeral: true});
+    const chosen = interaction.options.getChannel('channel', false);
+
+    if (chosen && chosen.type !== ChannelType.GuildText) {
+      await interaction.reply({content: '`channel` has to be a normal text channel.', ephemeral: true});
+      return;
+    }
+
+    const target = chosen
+      ? await interaction.guild?.channels.fetch(chosen.id).catch(() => null)
+      : interaction.channel;
+
+    if (!target?.isTextBased() || !('send' in target)) {
+      await interaction.reply({content: 'Pick a normal text channel, or run this in one.', ephemeral: true});
       return;
     }
 
@@ -337,8 +352,17 @@ export default class implements Command {
       return;
     }
 
-    await interaction.channel.send({embeds: [panelEmbed()], components: panelRows()});
-    await interaction.reply({content: 'Panel posted.', ephemeral: true});
+    try {
+      await target.send({embeds: [panelEmbed()], components: panelRows()});
+    } catch {
+      await interaction.reply({
+        content: `I cannot post in <#${target.id}>. Give me View Channel, Send Messages and Embed Links there.`,
+        ephemeral: true,
+      });
+      return;
+    }
+
+    await interaction.reply({content: `Panel posted in <#${target.id}>.`, ephemeral: true});
   }
 
   private async runStatus(interaction: ChatInputCommandInteraction): Promise<void> {

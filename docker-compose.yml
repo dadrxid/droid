@@ -20,6 +20,10 @@ services:
       - BOT_ACTIVITY=${BOT_ACTIVITY:-Hyperstrike DS4 · TMR · droidfix.uk}
       - PLAYLIST_API_URL=${PLAYLIST_API_URL:-}
       - HOMELAB_API_URL=${HOMELAB_API_URL:-}
+      # Ticket system: same DROIDFIX_BOT_TOKEN as Railway, or the site copy is skipped
+      - DROIDFIX_BOT_TOKEN=${DROIDFIX_BOT_TOKEN:-}
+      - DROIDFIX_SITE_URL=${DROIDFIX_SITE_URL:-https://droidfix.uk}
+      - DROIDFIX_MENU_URL=${DROIDFIX_MENU_URL:-}
     healthcheck:
       test: ["CMD-SHELL", "pgrep -f 'node.*migrate-and-start' || exit 1"]
       interval: 60s
