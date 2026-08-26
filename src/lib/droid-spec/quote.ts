@@ -100,7 +100,7 @@ export function quoteSpec(spec: DroidSpec): QuoteResult {
     lines.push({label: 'BO5 / themed shell', amount: addons.bo5Shell});
     total += addons.bo5Shell;
   } else if (spec.shell === SHELL_SOFT_TOUCH) {
-    lines.push({label: 'Soft Touch kit', amount: addons.softTouchShell});
+    lines.push({label: 'Soft Touch shell', amount: addons.softTouchShell});
     total += addons.softTouchShell;
   }
 
