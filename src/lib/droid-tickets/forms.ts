@@ -30,22 +30,6 @@ export const TICKET_FORMS: Record<TicketKind, TicketForm> = {
     title: 'Custom build request',
     inputs: [
       {
-        id: 'want',
-        label: 'What are you after?',
-        paragraph: true,
-        required: true,
-        max: 900,
-        placeholder: 'e.g. 8K pad, themed shell, back paddles, mouse click',
-      },
-      {
-        id: 'have',
-        label: 'Have you got the controller already?',
-        paragraph: false,
-        required: true,
-        max: 100,
-        placeholder: 'Yes / No, I need one supplying',
-      },
-      {
         id: 'country',
         label: 'Which country are you in?',
         paragraph: false,
