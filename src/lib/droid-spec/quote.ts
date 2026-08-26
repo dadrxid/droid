@@ -48,6 +48,8 @@ function fallbackAmount(id: string): number {
     'helium-hs2': addons.boardHelium,
     'caps-dse': addons.dseCaps,
     'caps-leadjoy': addons.leadjoyCaps,
+    'caps-leadjoy-n1': addons.leadjoyCaps,
+    'caps-leadjoy-n2': addons.leadjoyCaps,
     'shell-soft': addons.softTouchShell,
     'shell-bo5': addons.bo5Shell,
     'shell-ghost': addons.ghostShell,

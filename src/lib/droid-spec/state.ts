@@ -163,7 +163,7 @@ export function isGhost(spec: DroidSpec): boolean {
 }
 
 export function isLeadjoyCap(caps: string): boolean {
-  return caps === 'caps-leadjoy';
+  return caps === 'caps-leadjoy' || caps === 'caps-leadjoy-n1' || caps === 'caps-leadjoy-n2';
 }
 
 /** Ghost analog well: Leadjoy Magic n1 and n2 do not fit. Stock caps only. */

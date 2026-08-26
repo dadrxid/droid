@@ -57,20 +57,22 @@ const MAX_SELECT_ROWS = 4;
 
 type SelectOpt = {label: string; value: string; description?: string; order?: number};
 
-/** Short customer lines. Staff desk notes stay on the website, they do not show here. */
+/** Fallback if the website note is empty. Website notes win so Andrew can edit them. */
 const OPTION_NOTES: Record<string, string> = {
   base: 'We supply the pad, build it here, and fit one 8K board',
   'build-ps5': 'We supply the pad, build it here, and fit one 8K board',
   'caps-dse': 'DSE style stick caps',
-  'caps-leadjoy': 'Magic n1 or n2. These do not fit the Ghost shell',
+  'caps-leadjoy': 'Leadjoy Magic stick cap. Does not fit the Ghost shell',
+  'caps-leadjoy-n1': 'Leadjoy Magic NO.1 stick cap. Does not fit the Ghost shell',
+  'caps-leadjoy-n2': 'Leadjoy Magic NO.2 stick cap. Does not fit the Ghost shell',
   'shell-soft': 'Tap Colour after this pick, then type the colour you want',
   'shell-bo5': 'Add a photo of the shell on the last page',
   'shell-ghost': 'Stock caps only. Leadjoy Magic caps do not fit this shell',
   'faces-colour': 'Tap Colour after this pick, then type the colour you want',
-  'faces-resin': 'Resin PlayStation icons. Included with the clicky full kit',
+  'faces-resin': 'Resin printed Droid Roller Buttons for mouse click face kits. No PlayStation icons. Included with the clicky full kit',
   'click-triggers': 'Mouse click on the triggers only',
   'click-bumpers': 'Mouse click on the bumpers and triggers',
-  'click-faces': 'Faces, bumpers and triggers. Resin buttons come with this',
+  'click-faces': 'Faces, bumpers and triggers. Droid Roller Buttons come with this',
   'backs-bb': 'Tactile paddles. Next you pick how many, then height and side',
   'backs-dse': 'DSE blades or domes included',
   'shoulders-2': 'Two extra mouse-click buttons on the shoulders',
@@ -94,15 +96,11 @@ function tagFor(item: LiveItem): string {
 }
 
 function optNote(item: LiveItem): string | undefined {
-  if (OPTION_NOTES[item.id]) {
-    return OPTION_NOTES[item.id];
-  }
-
-  if (item.id.startsWith('extra-') && item.note) {
+  if (item.note?.trim()) {
     return item.note;
   }
 
-  return undefined;
+  return OPTION_NOTES[item.id];
 }
 
 function toOpt(item: LiveItem): SelectOpt {
@@ -382,7 +380,7 @@ export function wizardEmbed(spec: DroidSpec): EmbedBuilder {
   if ((spec.page === 'mods' || spec.page === 'look') && spec.click === CLICK_FACES) {
     embed.addFields({
       name: 'Clicky full kit',
-      value: 'This kit includes resin PlayStation buttons. You do not pay for those separately.',
+      value: 'This kit includes Droid Roller Buttons, resin printed for mouse click faces. You do not pay for those separately.',
     });
   }
 
@@ -483,7 +481,7 @@ function coreRows(spec: DroidSpec): any[] {
 
 function lookRows(spec: DroidSpec): any[] {
   lockGhostCaps(spec);
-  const capOpts = groupOpts('caps', isGhost(spec) ? ['caps-leadjoy'] : []);
+  const capOpts = groupOpts('caps', isGhost(spec) ? ['caps-leadjoy', 'caps-leadjoy-n1', 'caps-leadjoy-n2'] : []);
   const fullKit = spec.click === CLICK_FACES;
   const faceOpts = fullKit
     ? groupOpts('faces').filter(opt => opt.value === FACES_RESIN)
