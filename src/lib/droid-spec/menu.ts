@@ -188,8 +188,8 @@ const DEFAULT_ITEMS: LiveItem[] = [
 ];
 
 export const DEFAULT_SHEET_TITLE = 'Droid Rollers build sheet';
-export const DEFAULT_SHEET_BLURB =
-  'Custom 8K pads from {from}. Tap below and pick your parts.\nAndrew supplies the pad, builds it, tests it and posts it out. Nothing to send in.\nOnly you see the sheet until you submit. The price updates as you go.\nAt the end you can add photos of shells, buttons and extras with the photo buttons.';
+export const DEFAULT_SHEET_BLURB
+  = 'Custom 8K pads from {from}. Tap below and pick your parts.\nAndrew supplies the pad, builds it, tests it and posts it out. Nothing to send in.\nOnly you see the sheet until you submit. The price updates as you go.\nAt the end you can add photos of shells, buttons and extras with the photo buttons.';
 export const DEFAULT_SHEET_FOOTER = '8K custom boards only · prices as shown · UK tracked postage included';
 
 export const FALLBACK_PRICES: LivePrices = {

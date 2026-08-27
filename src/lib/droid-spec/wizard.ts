@@ -256,6 +256,8 @@ async function pushSheetCopy(client: Client): Promise<void> {
   lastSheetStamp = stamp;
   const emojiFor = (channel: TextBasedChannel) => brandEmoji('guild' in channel ? channel.guild : undefined);
 
+  // One channel at a time so a dead ticket does not block the rest.
+  /* eslint-disable no-await-in-loop */
   for (const [channelId, spec] of allSpecs()) {
     if (!spec.startMessageId || spec.ownerId) {
       continue;
@@ -276,6 +278,7 @@ async function pushSheetCopy(client: Client): Promise<void> {
       components: startRows(emojiFor(channel)),
     }).catch(() => undefined);
   }
+  /* eslint-enable no-await-in-loop */
 }
 
 export async function handleSpecSelect(interaction: StringSelectMenuInteraction): Promise<void> {
