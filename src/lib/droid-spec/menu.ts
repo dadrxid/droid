@@ -48,6 +48,10 @@ export type LivePrices = {
   extras: LiveExtra[];
   items: LiveItem[];
   postageNote: string;
+  sheetTitle: string;
+  sheetBlurb: string;
+  sheetFooter: string;
+  updatedAt: string;
 };
 
 export const BUILD_GROUP = 'base';
@@ -183,12 +187,21 @@ const DEFAULT_ITEMS: LiveItem[] = [
   },
 ];
 
+export const DEFAULT_SHEET_TITLE = 'Droid Rollers build sheet';
+export const DEFAULT_SHEET_BLURB =
+  'Custom 8K pads from {from}. Tap below and pick your parts.\nAndrew supplies the pad, builds it, tests it and posts it out. Nothing to send in.\nOnly you see the sheet until you submit. The price updates as you go.\nAt the end you can add photos of shells, buttons and extras with the photo buttons.';
+export const DEFAULT_SHEET_FOOTER = '8K custom boards only · prices as shown · UK tracked postage included';
+
 export const FALLBACK_PRICES: LivePrices = {
   live: false,
   base: 58.99,
   extras: [],
   items: DEFAULT_ITEMS,
   postageNote: 'UK tracked postage is included on Droid Rollers customs.',
+  sheetTitle: DEFAULT_SHEET_TITLE,
+  sheetBlurb: DEFAULT_SHEET_BLURB,
+  sheetFooter: DEFAULT_SHEET_FOOTER,
+  updatedAt: '',
   addons: DEFAULT_ADDONS,
 };
 
@@ -245,7 +258,14 @@ function mapAddons(items: ApiItem[]): LiveAddons {
   };
 }
 
-function mapPrices(payload: {postageNote?: string; items?: ApiItem[]}): LivePrices {
+function mapPrices(payload: {
+  postageNote?: string;
+  sheetTitle?: string;
+  sheetBlurb?: string;
+  sheetFooter?: string;
+  updatedAt?: string;
+  items?: ApiItem[];
+}): LivePrices {
   const items = Array.isArray(payload.items) ? payload.items : [];
 
   // The base row is flagged inBase, so money() would zero it like an included
@@ -276,6 +296,10 @@ function mapPrices(payload: {postageNote?: string; items?: ApiItem[]}): LivePric
     live: true,
     base,
     postageNote: payload.postageNote ? payload.postageNote : FALLBACK_PRICES.postageNote,
+    sheetTitle: payload.sheetTitle?.trim() ? payload.sheetTitle.trim() : FALLBACK_PRICES.sheetTitle,
+    sheetBlurb: payload.sheetBlurb?.trim() ? payload.sheetBlurb.trim() : FALLBACK_PRICES.sheetBlurb,
+    sheetFooter: payload.sheetFooter?.trim() ? payload.sheetFooter.trim() : FALLBACK_PRICES.sheetFooter,
+    updatedAt: payload.updatedAt ? payload.updatedAt : '',
     extras: mappedItems
       .filter(row => row.group === 'extras' && typeof row.priceGbp === 'number')
       .map(row => ({
@@ -382,7 +406,14 @@ export async function refreshLivePrices(): Promise<LivePrices> {
         return cache;
       }
 
-      const payload = (await res.json()) as {postageNote?: string; items?: ApiItem[]};
+      const payload = (await res.json()) as {
+        postageNote?: string;
+        sheetTitle?: string;
+        sheetBlurb?: string;
+        sheetFooter?: string;
+        updatedAt?: string;
+        items?: ApiItem[];
+      };
       cache = mapPrices(payload);
       return cache;
     } catch {

@@ -6,6 +6,7 @@ import {
   TextInputBuilder,
   TextInputStyle,
   type ButtonInteraction,
+  type Client,
   type Message,
   type ModalSubmitInteraction,
   type StringSelectMenuInteraction,
@@ -23,6 +24,7 @@ import {
   BACKS_BB,
   applyBbPick,
   colourButtonLabel,
+  allSpecs,
   getSpec,
   isBb,
   lockGhostCaps,
@@ -232,6 +234,48 @@ export async function postSpecStarter(channel: TextBasedChannel): Promise<void> 
     files: startFiles(),
   });
   getSpec(channel.id).startMessageId = message.id;
+}
+
+let lastSheetStamp = '';
+
+/** Keep starter copy in open tickets in line with the desk. */
+export function startSheetSync(client: Client): void {
+  setInterval(() => {
+    void pushSheetCopy(client);
+  }, 15_000);
+  void pushSheetCopy(client);
+}
+
+async function pushSheetCopy(client: Client): Promise<void> {
+  const prices = await refreshLivePrices();
+  const stamp = `${prices.updatedAt}|${String(prices.base)}|${prices.sheetTitle}|${prices.sheetBlurb}|${prices.sheetFooter}`;
+  if (stamp === lastSheetStamp) {
+    return;
+  }
+
+  lastSheetStamp = stamp;
+  const emojiFor = (channel: TextBasedChannel) => brandEmoji('guild' in channel ? channel.guild : undefined);
+
+  for (const [channelId, spec] of allSpecs()) {
+    if (!spec.startMessageId || spec.ownerId) {
+      continue;
+    }
+
+    const channel = await client.channels.fetch(channelId).catch(() => null);
+    if (!channel?.isTextBased() || !('messages' in channel)) {
+      continue;
+    }
+
+    const message = await channel.messages.fetch(spec.startMessageId).catch(() => null);
+    if (!message?.editable) {
+      continue;
+    }
+
+    await message.edit({
+      embeds: [startEmbed(emojiFor(channel))],
+      components: startRows(emojiFor(channel)),
+    }).catch(() => undefined);
+  }
 }
 
 export async function handleSpecSelect(interaction: StringSelectMenuInteraction): Promise<void> {

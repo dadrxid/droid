@@ -94,6 +94,10 @@ export function getSpec(channelId: string): DroidSpec {
   return spec;
 }
 
+export function allSpecs(): Array<[string, DroidSpec]> {
+  return [...byChannel.entries()];
+}
+
 export function resetSpec(channelId: string): DroidSpec {
   const spec = emptySpec();
   byChannel.set(channelId, spec);

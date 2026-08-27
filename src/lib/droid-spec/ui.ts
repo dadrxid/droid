@@ -262,26 +262,29 @@ function stepMeta(spec: DroidSpec): {step: number; total: number; title: string}
   };
 }
 
-/** Cheapest complete build: the in house build plus the cheapest board. */
+/** Desk base price. Board is a separate line, so the starter uses the base row. */
 function fromPrice(): number {
-  return buildFloor(defaultBuild());
+  return livePrices().base;
 }
 
 export function startEmbed(emoji = ''): EmbedBuilder {
+  const prices = livePrices();
+  const from = gbp(fromPrice());
+  const title = prices.sheetTitle ? prices.sheetTitle : 'Droid Rollers build sheet';
+  const blurb = (prices.sheetBlurb ? prices.sheetBlurb : '')
+    .replaceAll('{from}', from)
+    .split('\n')
+    .map(line => line.replace(from, `**${from}**`))
+    .join('\n');
+  const footer = prices.sheetFooter ? prices.sheetFooter : prices.postageNote;
+
   return new EmbedBuilder()
     .setColor(BRAND_BLUE)
-    .setTitle(branded(emoji, 'Droid Rollers build sheet'))
-    .setDescription(
-      [
-        `Custom 8K pads from **${gbp(fromPrice())}**. Tap below and pick your parts.`,
-        'Andrew supplies the pad, builds it, tests it and posts it out. Nothing to send in.',
-        'Only you see the sheet until you submit. The price updates as you go.',
-        'At the end you can add photos of shells, buttons and extras with the photo buttons.',
-      ].join('\n'),
-    )
+    .setTitle(branded(emoji, title))
+    .setDescription(blurb)
     .setImage(`attachment://${BANNER_NAME}`)
     .setFooter({
-      text: '8K custom boards only · prices as shown · UK tracked postage included',
+      text: footer.slice(0, 2048),
     });
 }
 
