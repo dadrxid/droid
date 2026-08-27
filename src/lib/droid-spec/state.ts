@@ -297,10 +297,6 @@ export function specText(spec: DroidSpec): string {
     pick(spec, 'caps', 'Caps'),
   ];
 
-  if (spec.tension && spec.tension !== TENSION_NONE) {
-    lines.push(pick(spec, 'tension', 'Stick tension'));
-  }
-
   lines.push(
     `${pick(spec, 'shell', 'Front shell')}${needsShellColour(spec) ? shellColour : ''}`,
     pick(spec, 'rear', 'Rear shell'),

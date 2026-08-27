@@ -276,6 +276,7 @@ function mapPrices(payload: {
     : FALLBACK_PRICES.base;
   const mappedItems: LiveItem[] = items
     .filter((row): row is ApiItem & {id: string} => typeof row.id === 'string' && row.id.length > 0)
+    .filter(row => row.group !== 'tension' && !row.id.startsWith('tension-'))
     .map((row, index) => ({
       id: row.id,
       group: row.group ? row.group : 'extras',

@@ -187,7 +187,6 @@ function specLines(spec: DroidSpec): Array<QuoteLine | null> {
   return [
     lineFor(spec.sticks),
     lineFor(resolvedCaps(spec)),
-    lineFor(spec.tension),
     lineFor(spec.shell),
     lineFor(spec.rear),
     lineFor(resolvedFaces(spec)),
