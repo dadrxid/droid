@@ -30,7 +30,6 @@ import {
   FACES_RESIN,
   MAX_BB,
   SHOULDERS_NONE,
-  TENSION_NONE,
   BACKS_BB,
   type DroidSpec,
   type PhotoKind,
@@ -465,7 +464,6 @@ function withNav(
 }
 
 function coreRows(spec: DroidSpec): any[] {
-  const tensionOpts = groupOpts('tension');
   const build = spec.build ? spec.build : (defaultBuild()?.id ?? '');
   return withNav(spec, [
     showsBuildPicker()
@@ -473,12 +471,6 @@ function coreRows(spec: DroidSpec): any[] {
       : null,
     groupRow('board', '8K board', groupOpts('boards'), spec.board),
     groupRow('sticks', 'Stick modules', groupOpts('sticks'), spec.sticks),
-    tensionOpts.length === 0
-      ? null
-      : groupRow('tension', 'Stick tension', [
-        {label: priced('Standard tension', inBaseLabel()), value: TENSION_NONE, order: 0},
-        ...tensionOpts,
-      ], spec.tension),
   ]);
 }
 
