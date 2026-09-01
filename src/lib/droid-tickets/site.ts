@@ -273,6 +273,7 @@ const DEFAULT_GATES: TicketGates = {
 };
 
 let cachedGates: TicketGates = DEFAULT_GATES;
+let gatesFetched = false;
 
 function asGates(raw: unknown): TicketGates | undefined {
   if (!raw || typeof raw !== 'object') {
@@ -290,12 +291,18 @@ function asGates(raw: unknown): TicketGates | undefined {
   };
 }
 
+/** True after at least one successful read from droidfix.uk. */
+export function ticketGatesLive(): boolean {
+  return gatesFetched;
+}
+
 /** Staff desk ticket locks. Cached so Discord still works if the site blips. */
 export async function fetchTicketGates(): Promise<TicketGates> {
   const payload = await getJson('/api/bot/ticket-gates', 2500);
   const next = asGates(payload);
   if (next) {
     cachedGates = next;
+    gatesFetched = true;
   }
 
   return cachedGates;
@@ -310,6 +317,11 @@ export function ticketKindClosedNote(kind: 'custom' | 'repair', gates: TicketGat
 }
 
 export function ticketGateStamp(gates: TicketGates): string {
-  return `${gates.customOpen ? '1' : '0'}|${gates.repairOpen ? '1' : '0'}`;
+  return [
+    gates.customOpen ? '1' : '0',
+    gates.repairOpen ? '1' : '0',
+    gates.customClosedNote,
+    gates.repairClosedNote,
+  ].join('|');
 }
 

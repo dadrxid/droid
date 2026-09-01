@@ -1,4 +1,5 @@
 import {
+  ChannelType,
   type Client,
   type Guild,
   type Message,
@@ -9,12 +10,14 @@ import {
   fetchTicketGates,
   panelThumbnailUrl,
   ticketGateStamp,
+  ticketGatesLive,
   type TicketGates,
 } from './site.js';
 import {getSettings, listTrackedPanels, saveSettings} from './store.js';
 import {panelEmbed, panelRows} from './ui.js';
 
 const PANEL_ART = 'dr3d';
+const RECOVER_MS = 120_000;
 
 export function livePanelStamp(gates: TicketGates): string {
   return `${PANEL_ART}|${ticketGateStamp(gates)}`;
@@ -75,6 +78,32 @@ export async function findExistingPanel(channel: TextChannel): Promise<Message |
   return recent.find(message => isPanelMessage(message)) ?? null;
 }
 
+async function findPanelInGuild(guild: Guild): Promise<Message | null> {
+  const texts = [...guild.channels.cache.values()]
+    .filter(channel => channel.type === ChannelType.GuildText)
+    .sort((a, b) => {
+      const score = (name: string) => (/ticket|panel|support|order|create|repair/i.test(name) ? 0 : 1);
+      return score(a.name) - score(b.name);
+    })
+    .slice(0, 20);
+
+  /* eslint-disable no-await-in-loop */
+  for (const channel of texts) {
+    if (!('messages' in channel)) {
+      continue;
+    }
+
+    const recent = await channel.messages.fetch({limit: 50}).catch(() => null);
+    const found = recent?.find(message => isPanelMessage(message));
+    if (found) {
+      return found;
+    }
+  }
+  /* eslint-enable no-await-in-loop */
+
+  return null;
+}
+
 function isUnknownMessage(error: unknown): boolean {
   return Boolean(error && typeof error === 'object' && 'code' in error && (error as {code: number}).code === 10008);
 }
@@ -103,11 +132,21 @@ export function startPanelSync(client: Client): void {
   setInterval(() => {
     void pushPanelCopy(client);
   }, 15_000);
-  void pushPanelCopy(client);
+  setInterval(() => {
+    void recoverLostPanels(client);
+  }, RECOVER_MS);
+  void (async () => {
+    await pushPanelCopy(client);
+    await recoverLostPanels(client);
+  })();
 }
 
 async function pushPanelCopy(client: Client): Promise<void> {
   const gates = await fetchTicketGates();
+  if (!ticketGatesLive()) {
+    return;
+  }
+
   const stamp = livePanelStamp(gates);
   const panels = await listTrackedPanels();
 
@@ -134,6 +173,41 @@ async function pushPanelCopy(client: Client): Promise<void> {
     } catch (error: unknown) {
       if (isUnknownMessage(error)) {
         await saveSettings(panel.guildId, {panelChannelId: '', panelMessageId: '', panelStamp: ''});
+      }
+    }
+  }
+  /* eslint-enable no-await-in-loop */
+}
+
+async function recoverLostPanels(client: Client): Promise<void> {
+  const gates = await fetchTicketGates();
+  if (!ticketGatesLive()) {
+    return;
+  }
+
+  const tracked = new Set((await listTrackedPanels()).map(panel => panel.guildId));
+
+  /* eslint-disable no-await-in-loop */
+  for (const guild of client.guilds.cache.values()) {
+    if (tracked.has(guild.id)) {
+      continue;
+    }
+
+    const settings = await getSettings(guild.id);
+    if (!settings.categoryId) {
+      continue;
+    }
+
+    const found = await findPanelInGuild(guild);
+    if (!found) {
+      continue;
+    }
+
+    try {
+      await editPanelMessage(found, gates);
+    } catch (error: unknown) {
+      if (!isUnknownMessage(error)) {
+        console.warn(`Ticket panel recover skipped for ${guild.id}:`, error);
       }
     }
   }
