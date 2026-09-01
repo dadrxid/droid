@@ -12,6 +12,10 @@ function siteOrigin(): string {
   return raw.replace(/\/+$/, '');
 }
 
+export function panelThumbnailUrl(): string {
+  return `${siteOrigin()}/brand/droid-rollers/dr-3d.png`;
+}
+
 function botToken(): string {
   return process.env.DROIDFIX_BOT_TOKEN?.trim() ?? '';
 }

@@ -22,10 +22,11 @@ import {
   staffCanManage,
   userTag,
 } from '../lib/droid-tickets/service.js';
-import {siteSyncEnabled, fetchTicketGates, ticketGateStamp, ticketKindClosedNote, ticketKindOpen} from '../lib/droid-tickets/site.js';
+import {siteSyncEnabled, fetchTicketGates, ticketKindClosedNote, ticketKindOpen} from '../lib/droid-tickets/site.js';
 import {
   editPanelMessage,
   findExistingPanel,
+  livePanelStamp,
   panelPayload,
   rememberPanel,
 } from '../lib/droid-tickets/panel-sync.js';
@@ -381,7 +382,7 @@ export default class implements Command {
       }
 
       const posted = await target.send(payload);
-      await rememberPanel(interaction.guildId ?? '', posted.channelId, posted.id, ticketGateStamp(gates));
+      await rememberPanel(interaction.guildId ?? '', posted.channelId, posted.id, livePanelStamp(gates));
     } catch {
       await interaction.reply({
         content: `I cannot post in <#${target.id}>. Give me View Channel, Send Messages and Embed Links there.`,

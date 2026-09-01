@@ -4,14 +4,21 @@ import {
   type Message,
   type TextChannel,
 } from 'discord.js';
-import {brandEmoji, brandLogo} from '../droid-brand.js';
+import {brandEmoji} from '../droid-brand.js';
 import {
   fetchTicketGates,
+  panelThumbnailUrl,
   ticketGateStamp,
   type TicketGates,
 } from './site.js';
 import {getSettings, listTrackedPanels, saveSettings} from './store.js';
 import {panelEmbed, panelRows} from './ui.js';
+
+const PANEL_ART = 'dr3d';
+
+export function livePanelStamp(gates: TicketGates): string {
+  return `${PANEL_ART}|${ticketGateStamp(gates)}`;
+}
 
 function isPanelMessage(message: Message): boolean {
   if (message.author.id !== message.client.user?.id) {
@@ -29,7 +36,7 @@ function isPanelMessage(message: Message): boolean {
 export function panelPayload(guild: Guild | null | undefined, gates: TicketGates) {
   const emoji = brandEmoji(guild);
   return {
-    embeds: [panelEmbed(emoji, brandLogo(guild), gates)],
+    embeds: [panelEmbed(emoji, panelThumbnailUrl(), gates)],
     components: panelRows(emoji, gates),
   };
 }
@@ -73,7 +80,7 @@ export async function editPanelMessage(message: Message, gates: TicketGates): Pr
     return;
   }
 
-  const stamp = ticketGateStamp(gates);
+  const stamp = livePanelStamp(gates);
   const settings = await getSettings(message.guild.id);
   if (settings.panelMessageId === message.id && settings.panelStamp === stamp) {
     return;
@@ -97,7 +104,7 @@ export function startPanelSync(client: Client): void {
 
 async function pushPanelCopy(client: Client): Promise<void> {
   const gates = await fetchTicketGates();
-  const stamp = ticketGateStamp(gates);
+  const stamp = livePanelStamp(gates);
   const panels = await listTrackedPanels();
 
   /* eslint-disable no-await-in-loop */
