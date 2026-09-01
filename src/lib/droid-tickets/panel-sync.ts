@@ -75,8 +75,12 @@ export async function findExistingPanel(channel: TextChannel): Promise<Message |
   return recent.find(message => isPanelMessage(message)) ?? null;
 }
 
+function isUnknownMessage(error: unknown): boolean {
+  return Boolean(error && typeof error === 'object' && 'code' in error && (error as {code: number}).code === 10008);
+}
+
 export async function editPanelMessage(message: Message, gates: TicketGates): Promise<void> {
-  if (!message.guild || !message.editable) {
+  if (!message.guild) {
     return;
   }
 
@@ -119,14 +123,19 @@ async function pushPanelCopy(client: Client): Promise<void> {
     }
 
     const message = await channel.messages.fetch(panel.messageId).catch(() => null);
-    if (!message?.editable) {
-      await saveSettings(panel.guildId, {panelChannelId: '', panelMessageId: '', panelStamp: ''});
+    if (!message) {
       continue;
     }
 
     const guild = 'guild' in channel ? channel.guild : message.guild;
-    await message.edit(panelPayload(guild, gates));
-    await saveSettings(panel.guildId, {panelStamp: stamp});
+    try {
+      await message.edit(panelPayload(guild, gates));
+      await saveSettings(panel.guildId, {panelStamp: stamp});
+    } catch (error: unknown) {
+      if (isUnknownMessage(error)) {
+        await saveSettings(panel.guildId, {panelChannelId: '', panelMessageId: '', panelStamp: ''});
+      }
+    }
   }
   /* eslint-enable no-await-in-loop */
 }
