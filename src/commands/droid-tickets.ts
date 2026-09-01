@@ -11,7 +11,6 @@ import {
 import {injectable} from 'inversify';
 import Command from './index.js';
 import {requireGuildAdministrator} from '../utils/require-guild-admin.js';
-import {brandEmoji, brandLogo} from '../lib/droid-brand.js';
 import {postSpecStarter} from '../lib/droid-spec/wizard.js';
 import {readTicketForm, ticketModal} from '../lib/droid-tickets/forms.js';
 import {
@@ -23,7 +22,13 @@ import {
   staffCanManage,
   userTag,
 } from '../lib/droid-tickets/service.js';
-import {siteSyncEnabled, fetchTicketGates, ticketKindClosedNote, ticketKindOpen} from '../lib/droid-tickets/site.js';
+import {siteSyncEnabled, fetchTicketGates, ticketGateStamp, ticketKindClosedNote, ticketKindOpen} from '../lib/droid-tickets/site.js';
+import {
+  editPanelMessage,
+  findExistingPanel,
+  panelPayload,
+  rememberPanel,
+} from '../lib/droid-tickets/panel-sync.js';
 import {
   getSettings,
   openTicketFor,
@@ -36,8 +41,6 @@ import {
 import {
   closeConfirmRow,
   deleteConfirmRow,
-  panelEmbed,
-  panelRows,
 } from '../lib/droid-tickets/ui.js';
 
 /** One ticket per member per kind, and a short cooldown so buttons cannot be spammed. */
@@ -82,7 +85,7 @@ export default class implements Command {
         .setRequired(false)))
     .addSubcommand(subcommand => subcommand
       .setName('panel')
-      .setDescription('Post the Create ticket panel (Admin only)')
+      .setDescription('Post or update the Create ticket panel (Admin only)')
       .addChannelOption(option => option
         .setName('channel')
         .setDescription('Where the ticket buttons go (default: this channel)')
@@ -359,14 +362,26 @@ export default class implements Command {
       return;
     }
 
-    const emoji = brandEmoji(interaction.guild);
     const gates = await fetchTicketGates();
+    const payload = panelPayload(interaction.guild, gates);
+
+    const existing = target.type === ChannelType.GuildText
+      ? await findExistingPanel(target)
+      : null;
 
     try {
-      await target.send({
-        embeds: [panelEmbed(emoji, brandLogo(interaction.guild), gates)],
-        components: panelRows(emoji),
-      });
+      if (existing) {
+        await editPanelMessage(existing, gates);
+        await rememberPanel(interaction.guildId ?? '', existing.channelId, existing.id);
+        await interaction.reply({
+          content: `Panel updated in <#${target.id}>. Desk Open/Closed will keep this message in line. No need to delete it.`,
+          ephemeral: true,
+        });
+        return;
+      }
+
+      const posted = await target.send(payload);
+      await rememberPanel(interaction.guildId ?? '', posted.channelId, posted.id, ticketGateStamp(gates));
     } catch {
       await interaction.reply({
         content: `I cannot post in <#${target.id}>. Give me View Channel, Send Messages and Embed Links there.`,
@@ -375,7 +390,10 @@ export default class implements Command {
       return;
     }
 
-    await interaction.reply({content: `Panel posted in <#${target.id}>.`, ephemeral: true});
+    await interaction.reply({
+      content: `Panel posted in <#${target.id}>. Desk Open/Closed will update this message. Do not delete it.`,
+      ephemeral: true,
+    });
   }
 
   private async runStatus(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -388,6 +406,7 @@ export default class implements Command {
         settings.staffRoleId ? `Staff role: <@&${settings.staffRoleId}>` : 'Staff role: not set',
         settings.logChannelId ? `Log channel: <#${settings.logChannelId}>` : 'Log channel: not set',
         settings.archiveCategoryId ? `Archive: <#${settings.archiveCategoryId}>` : 'Archive: not set',
+        settings.panelChannelId ? `Panel: <#${settings.panelChannelId}>` : 'Panel: not tracked yet. Run /droid-tickets panel once, or press a ticket button.',
         `Numbers so far: custom ${String(settings.counters.custom)}, repair ${String(settings.counters.repair)}`,
         `Website sync: ${siteSyncEnabled() ? 'on' : 'off'}`,
       ].join('\n'),
@@ -471,6 +490,10 @@ export default class implements Command {
       openTicketFor(interaction.guild.id, interaction.user.id, kind),
       fetchTicketGates(),
     ]);
+    if (interaction.channelId) {
+      void rememberPanel(interaction.guild.id, interaction.channelId, interaction.message.id);
+    }
+
     if (existing && interaction.guild.channels.cache.has(existing.channelId)) {
       await interaction.reply({
         content: `You already have an open ticket: <#${existing.channelId}>. Use that one.`,
@@ -480,6 +503,7 @@ export default class implements Command {
     }
 
     if (!ticketKindOpen(kind, gates)) {
+      await editPanelMessage(interaction.message, gates).catch(() => undefined);
       await interaction.reply({
         content: ticketKindClosedNote(kind, gates),
         ephemeral: true,

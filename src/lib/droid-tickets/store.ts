@@ -42,6 +42,9 @@ export type GuildTicketSettings = {
   staffRoleId: string;
   logChannelId: string;
   archiveCategoryId: string;
+  panelChannelId: string;
+  panelMessageId: string;
+  panelStamp: string;
   counters: {custom: number; repair: number};
 };
 
@@ -62,6 +65,9 @@ function emptySettings(): GuildTicketSettings {
     staffRoleId: '',
     logChannelId: '',
     archiveCategoryId: '',
+    panelChannelId: '',
+    panelMessageId: '',
+    panelStamp: '',
     counters: {custom: 0, repair: 0},
   };
 }
@@ -83,6 +89,9 @@ function coerce(raw: unknown): TicketState {
       staffRoleId: typeof entry.staffRoleId === 'string' ? entry.staffRoleId : '',
       logChannelId: typeof entry.logChannelId === 'string' ? entry.logChannelId : '',
       archiveCategoryId: typeof entry.archiveCategoryId === 'string' ? entry.archiveCategoryId : '',
+      panelChannelId: typeof entry.panelChannelId === 'string' ? entry.panelChannelId : '',
+      panelMessageId: typeof entry.panelMessageId === 'string' ? entry.panelMessageId : '',
+      panelStamp: typeof entry.panelStamp === 'string' ? entry.panelStamp : '',
       counters: {
         custom: typeof counters.custom === 'number' ? counters.custom : 0,
         repair: typeof counters.repair === 'number' ? counters.repair : 0,
@@ -136,11 +145,38 @@ export async function getSettings(guildId: string): Promise<GuildTicketSettings>
   return current.guilds[guildId] ?? emptySettings();
 }
 
+export async function listTrackedPanels(): Promise<Array<{
+  guildId: string;
+  channelId: string;
+  messageId: string;
+  stamp: string;
+}>> {
+  const current = await load();
+  const rows: Array<{guildId: string; channelId: string; messageId: string; stamp: string}> = [];
+  for (const [guildId, settings] of Object.entries(current.guilds)) {
+    if (!settings.panelChannelId || !settings.panelMessageId) {
+      continue;
+    }
+
+    rows.push({
+      guildId,
+      channelId: settings.panelChannelId,
+      messageId: settings.panelMessageId,
+      stamp: settings.panelStamp,
+    });
+  }
+
+  return rows;
+}
+
 export type TicketSettingsPatch = {
   categoryId?: string;
   staffRoleId?: string;
   logChannelId?: string;
   archiveCategoryId?: string;
+  panelChannelId?: string;
+  panelMessageId?: string;
+  panelStamp?: string;
 };
 
 export async function saveSettings(

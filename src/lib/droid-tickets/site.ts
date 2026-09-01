@@ -305,3 +305,7 @@ export function ticketKindClosedNote(kind: 'custom' | 'repair', gates: TicketGat
   return kind === 'custom' ? gates.customClosedNote : gates.repairClosedNote;
 }
 
+export function ticketGateStamp(gates: TicketGates): string {
+  return `${gates.customOpen ? '1' : '0'}|${gates.repairOpen ? '1' : '0'}`;
+}
+

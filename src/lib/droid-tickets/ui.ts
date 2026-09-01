@@ -42,17 +42,22 @@ export function panelEmbed(
   return logo ? embed.setThumbnail(logo) : embed;
 }
 
-export function panelRows(emoji: string): any[] {
+export function panelRows(
+  emoji: string,
+  gates?: {customOpen: boolean; repairOpen: boolean},
+): any[] {
+  const customOpen = gates ? gates.customOpen : true;
+  const repairOpen = gates ? gates.repairOpen : true;
   return [
     new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId('dt:new:custom')
-        .setLabel('Custom build')
+        .setLabel(customOpen ? 'Custom build' : 'Custom build · closed')
         .setEmoji(emoji ? emoji : '🎮')
-        .setStyle(ButtonStyle.Primary),
+        .setStyle(customOpen ? ButtonStyle.Primary : ButtonStyle.Secondary),
       new ButtonBuilder()
         .setCustomId('dt:new:repair')
-        .setLabel('Repair')
+        .setLabel(repairOpen ? 'Repair' : 'Repair · closed')
         .setEmoji('🛠️')
         .setStyle(ButtonStyle.Secondary),
     ),

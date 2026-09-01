@@ -21,6 +21,7 @@ import {isInvalidDiscordTokenError, waitBeforeDiscordLoginRetry} from './utils/d
 import createDiscordClient from './utils/create-discord-client.js';
 import {setActiveDiscordClient} from './utils/discord-client-holder.js';
 import {handleSpecButton, handleSpecModal, handleSpecSelect, startSheetSync} from './lib/droid-spec/wizard.js';
+import {startPanelSync} from './lib/droid-tickets/panel-sync.js';
 
 @injectable()
 export default class {
@@ -298,6 +299,7 @@ export default class {
       spinner.succeed(`Ready! Invite the bot with https://discordapp.com/oauth2/authorize?client_id=${client.user?.id ?? ''}&scope=bot%20applications.commands&permissions=36700160`);
       this.startHeartbeat(client, spinner);
       startSheetSync(client);
+      startPanelSync(client);
     });
 
     client.on('error', console.error);
