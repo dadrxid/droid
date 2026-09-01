@@ -23,7 +23,7 @@ import {
   staffCanManage,
   userTag,
 } from '../lib/droid-tickets/service.js';
-import {siteSyncEnabled} from '../lib/droid-tickets/site.js';
+import {siteSyncEnabled, fetchTicketGates, ticketKindClosedNote, ticketKindOpen} from '../lib/droid-tickets/site.js';
 import {
   getSettings,
   openTicketFor,
@@ -227,6 +227,12 @@ export default class implements Command {
 
     await interaction.deferReply({ephemeral: true});
 
+    const gates = await fetchTicketGates();
+    if (!ticketKindOpen(kind, gates)) {
+      await interaction.editReply(ticketKindClosedNote(kind, gates));
+      return;
+    }
+
     const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
     if (!member) {
       await interaction.editReply('Could not read your server profile. Try again.');
@@ -354,10 +360,11 @@ export default class implements Command {
     }
 
     const emoji = brandEmoji(interaction.guild);
+    const gates = await fetchTicketGates();
 
     try {
       await target.send({
-        embeds: [panelEmbed(emoji, brandLogo(interaction.guild))],
+        embeds: [panelEmbed(emoji, brandLogo(interaction.guild), gates)],
         components: panelRows(emoji),
       });
     } catch {
@@ -460,10 +467,21 @@ export default class implements Command {
       return;
     }
 
-    const existing = await openTicketFor(interaction.guild.id, interaction.user.id, kind);
+    const [existing, gates] = await Promise.all([
+      openTicketFor(interaction.guild.id, interaction.user.id, kind),
+      fetchTicketGates(),
+    ]);
     if (existing && interaction.guild.channels.cache.has(existing.channelId)) {
       await interaction.reply({
         content: `You already have an open ticket: <#${existing.channelId}>. Use that one.`,
+        ephemeral: true,
+      });
+      return;
+    }
+
+    if (!ticketKindOpen(kind, gates)) {
+      await interaction.reply({
+        content: ticketKindClosedNote(kind, gates),
         ephemeral: true,
       });
       return;

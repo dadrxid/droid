@@ -12,11 +12,13 @@ import {
   type StringSelectMenuInteraction,
   type TextBasedChannel,
 } from 'discord.js';
+import {ticketForChannel} from '../droid-tickets/store.js';
+import {pushQuotedBuild} from '../droid-tickets/site.js';
 import {getBotOwnerId} from '../../utils/require-guild-admin.js';
 import {brandEmoji} from '../droid-brand.js';
 import {taglineFile} from './assets.js';
 import {hasItem, refreshLivePrices} from './menu.js';
-import {quoteSpec} from './quote.js';
+import {gbp, plusLabel, quoteSpec} from './quote.js';
 import {isImageMessage, photoAttachments, storeChannelPhoto} from './photos.js';
 import {
   CLICK_FACES,
@@ -416,6 +418,40 @@ export async function handleSpecButton(interaction: ButtonInteraction): Promise<
       files,
       allowedMentions: {users: [ownerId]},
       ephemeral: false,
+    });
+    const ticket = interaction.channelId ? await ticketForChannel(interaction.channelId) : undefined;
+    void pushQuotedBuild({
+      customer: ticket?.openerTag || interaction.user.username,
+      ticketId: ticket?.id ?? '',
+      totalGbp: quote.total,
+      lines: quote.lines.map((line, index) => {
+        if (line.ask) {
+          return `${line.label} (ask)`;
+        }
+
+        const mark = index === 0 ? gbp(line.amount) : plusLabel(line.amount);
+        return `${line.label} ${mark}`;
+      }),
+      notes: [
+        spec.shellNote ? `Shell colour: ${spec.shellNote}` : '',
+        spec.facesNote ? `Button colour: ${spec.facesNote}` : '',
+      ].filter(Boolean).join('\n'),
+      spec: {
+        build: spec.build,
+        board: spec.board,
+        sticks: spec.sticks,
+        caps: spec.caps,
+        shell: spec.shell,
+        rear: spec.rear,
+        faces: spec.faces,
+        backs: spec.backs,
+        click: spec.click,
+        shoulders: spec.shoulders,
+        bbCount: spec.bbCount,
+        extras: spec.extras,
+        shellNote: spec.shellNote,
+        facesNote: spec.facesNote,
+      },
     });
   }
 }

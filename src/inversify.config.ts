@@ -48,6 +48,7 @@ import WelcomeDroidfix from './commands/welcome-droidfix.js';
 import WelcomeDroidlab from './commands/welcome-droidlab.js';
 import WelcomeTest from './commands/welcome-test.js';
 import DroidTickets from './commands/droid-tickets.js';
+import DroidStock from './commands/droid-stock.js';
 import FileCacheProvider from './services/file-cache.js';
 import KeyValueCacheProvider from './services/key-value-cache.js';
 
@@ -104,6 +105,7 @@ container.bind<YoutubeAPI>(TYPES.Services.YoutubeAPI).to(YoutubeAPI).inSingleton
   WelcomeDroidlab,
   WelcomeTest,
   DroidTickets,
+  DroidStock,
 ].forEach(command => {
   container.bind<Command>(TYPES.Command).to(command).inSingletonScope();
 });

@@ -15,15 +15,27 @@ export const KIND_LABELS: Record<TicketKind, string> = {
   repair: 'Repair',
 };
 
-export function panelEmbed(emoji: string, logo?: string): EmbedBuilder {
+export function panelEmbed(
+  emoji: string,
+  logo?: string,
+  gates?: {customOpen: boolean; repairOpen: boolean; customClosedNote: string; repairClosedNote: string},
+): EmbedBuilder {
+  const customLine = gates && !gates.customOpen
+    ? '**Custom build** · closed until HeliumStrike. Press the button for why.'
+    : '**Custom build** · instant price on your spec. Built and shipped in house, 4 to 6 weeks.';
+  const repairLine = gates && !gates.repairOpen
+    ? '**Repair** · closed right now. Press the button for why.'
+    : '**Repair** · stick drift, dead buttons, charging, or an 8K board swap on a pad you already own. UK mail-in only.';
+
+  const closed = Boolean(gates && (!gates.customOpen || !gates.repairOpen));
   const embed = new EmbedBuilder()
-    .setColor(BRAND_BLUE)
+    .setColor(closed ? CLOSED_AMBER : BRAND_BLUE)
     .setTitle(branded(emoji, 'DroidFix tickets'))
     .setDescription([
       'Pick a button and fill in the short form. Your private ticket opens straight after.',
       '',
-      '**Custom build** · instant price on your spec. Built and shipped in house, 4 to 6 weeks.',
-      '**Repair** · stick drift, dead buttons, charging, or an 8K board swap on a pad you already own. UK mail-in only.',
+      customLine,
+      repairLine,
     ].join('\n'))
     .setFooter({text: 'droidfix.uk · only you and the DroidFix team can see your ticket'});
 
