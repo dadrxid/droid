@@ -281,8 +281,8 @@ function asGates(raw: unknown): TicketGates | undefined {
   return {
     customOpen: data.customOpen === true,
     repairOpen: data.repairOpen !== false,
-    customClosedNote: customNote || DEFAULT_GATES.customClosedNote,
-    repairClosedNote: repairNote || DEFAULT_GATES.repairClosedNote,
+    customClosedNote: customNote.length > 0 ? customNote : DEFAULT_GATES.customClosedNote,
+    repairClosedNote: repairNote.length > 0 ? repairNote : DEFAULT_GATES.repairClosedNote,
   };
 }
 

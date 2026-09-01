@@ -421,7 +421,7 @@ export async function handleSpecButton(interaction: ButtonInteraction): Promise<
     });
     const ticket = interaction.channelId ? await ticketForChannel(interaction.channelId) : undefined;
     void pushQuotedBuild({
-      customer: ticket?.openerTag || interaction.user.username,
+      customer: ticket?.openerTag ?? interaction.user.username,
       ticketId: ticket?.id ?? '',
       totalGbp: quote.total,
       lines: quote.lines.map((line, index) => {
