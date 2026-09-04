@@ -7,11 +7,10 @@ import {
 } from 'discord.js';
 import {brandEmoji} from '../droid-brand.js';
 import {
-  fetchTicketGates,
-  panelThumbnailUrl,
-  ticketGateStamp,
+  fetchTicketPanel,
   ticketGatesLive,
-  type TicketGates,
+  ticketPanelStamp,
+  type TicketPanel,
 } from './site.js';
 import {getSettings, listTrackedPanels, saveSettings} from './store.js';
 import {panelEmbed, panelRows} from './ui.js';
@@ -19,8 +18,8 @@ import {panelEmbed, panelRows} from './ui.js';
 const PANEL_ART = 'dr3d';
 const RECOVER_MS = 120_000;
 
-export function livePanelStamp(gates: TicketGates): string {
-  return `${PANEL_ART}|${ticketGateStamp(gates)}`;
+export function livePanelStamp(panel: TicketPanel): string {
+  return `${PANEL_ART}|${ticketPanelStamp(panel)}`;
 }
 
 function isPanelMessage(message: Message): boolean {
@@ -31,16 +30,16 @@ function isPanelMessage(message: Message): boolean {
   return message.components.some(row =>
     row.components.some(component => {
       const id = 'customId' in component ? component.customId : '';
-      return id === 'dt:new:custom' || id === 'dt:new:repair';
+      return Boolean(id?.startsWith('dt:new:'));
     }),
   );
 }
 
-export function panelPayload(guild: Guild | null | undefined, gates: TicketGates) {
+export function panelPayload(guild: Guild | null | undefined, panel: TicketPanel) {
   const emoji = brandEmoji(guild);
   return {
-    embeds: [panelEmbed(emoji, panelThumbnailUrl(), gates)],
-    components: panelRows(emoji, gates),
+    embeds: [panelEmbed(emoji, panel)],
+    components: panelRows(emoji, panel),
   };
 }
 
@@ -108,18 +107,18 @@ function isUnknownMessage(error: unknown): boolean {
   return Boolean(error && typeof error === 'object' && 'code' in error && (error as {code: number}).code === 10008);
 }
 
-export async function editPanelMessage(message: Message, gates: TicketGates): Promise<void> {
+export async function editPanelMessage(message: Message, panel: TicketPanel): Promise<void> {
   if (!message.guild) {
     return;
   }
 
-  const stamp = livePanelStamp(gates);
+  const stamp = livePanelStamp(panel);
   const settings = await getSettings(message.guild.id);
   if (settings.panelMessageId === message.id && settings.panelStamp === stamp) {
     return;
   }
 
-  await message.edit(panelPayload(message.guild, gates));
+  await message.edit(panelPayload(message.guild, panel));
   await saveSettings(message.guild.id, {
     panelChannelId: message.channelId,
     panelMessageId: message.id,
@@ -142,37 +141,37 @@ export function startPanelSync(client: Client): void {
 }
 
 async function pushPanelCopy(client: Client): Promise<void> {
-  const gates = await fetchTicketGates();
+  const ticketPanel = await fetchTicketPanel();
   if (!ticketGatesLive()) {
     return;
   }
 
-  const stamp = livePanelStamp(gates);
+  const stamp = livePanelStamp(ticketPanel);
   const panels = await listTrackedPanels();
 
   /* eslint-disable no-await-in-loop */
-  for (const panel of panels) {
-    if (panel.stamp === stamp) {
+  for (const tracked of panels) {
+    if (tracked.stamp === stamp) {
       continue;
     }
 
-    const channel = await client.channels.fetch(panel.channelId).catch(() => null);
+    const channel = await client.channels.fetch(tracked.channelId).catch(() => null);
     if (!channel?.isTextBased() || !('messages' in channel)) {
       continue;
     }
 
-    const message = await channel.messages.fetch(panel.messageId).catch(() => null);
+    const message = await channel.messages.fetch(tracked.messageId).catch(() => null);
     if (!message) {
       continue;
     }
 
     const guild = 'guild' in channel ? channel.guild : message.guild;
     try {
-      await message.edit(panelPayload(guild, gates));
-      await saveSettings(panel.guildId, {panelStamp: stamp});
+      await message.edit(panelPayload(guild, ticketPanel));
+      await saveSettings(tracked.guildId, {panelStamp: stamp});
     } catch (error: unknown) {
       if (isUnknownMessage(error)) {
-        await saveSettings(panel.guildId, {panelChannelId: '', panelMessageId: '', panelStamp: ''});
+        await saveSettings(tracked.guildId, {panelChannelId: '', panelMessageId: '', panelStamp: ''});
       }
     }
   }
@@ -180,12 +179,12 @@ async function pushPanelCopy(client: Client): Promise<void> {
 }
 
 async function recoverLostPanels(client: Client): Promise<void> {
-  const gates = await fetchTicketGates();
+  const ticketPanel = await fetchTicketPanel();
   if (!ticketGatesLive()) {
     return;
   }
 
-  const tracked = new Set((await listTrackedPanels()).map(panel => panel.guildId));
+  const tracked = new Set((await listTrackedPanels()).map(row => row.guildId));
 
   /* eslint-disable no-await-in-loop */
   for (const guild of client.guilds.cache.values()) {
@@ -204,7 +203,7 @@ async function recoverLostPanels(client: Client): Promise<void> {
     }
 
     try {
-      await editPanelMessage(found, gates);
+      await editPanelMessage(found, ticketPanel);
     } catch (error: unknown) {
       if (!isUnknownMessage(error)) {
         console.warn(`Ticket panel recover skipped for ${guild.id}:`, error);

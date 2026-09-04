@@ -41,18 +41,41 @@ export type LiveItem = {
   sortOrder: number;
 };
 
+export type LiveGroupMeta = {
+  id: string;
+  label: string;
+};
+
 export type LivePrices = {
   live: boolean;
   base: number;
   addons: LiveAddons;
   extras: LiveExtra[];
   items: LiveItem[];
+  groups: LiveGroupMeta[];
   postageNote: string;
   sheetTitle: string;
   sheetBlurb: string;
   sheetFooter: string;
   updatedAt: string;
 };
+
+/** Groups the 5-page sheet already walks. New desk sections appear after Mods. */
+const KNOWN_SHEET_GROUPS = new Set([
+  'base',
+  'boards',
+  'sticks',
+  'caps',
+  'shell',
+  'rear',
+  'faces',
+  'click',
+  'backs',
+  'shoulders',
+  'extras',
+  'notes',
+  'tension',
+]);
 
 export const BUILD_GROUP = 'base';
 
@@ -197,6 +220,7 @@ export const FALLBACK_PRICES: LivePrices = {
   base: 58.99,
   extras: [],
   items: DEFAULT_ITEMS,
+  groups: [],
   postageNote: 'UK tracked postage is included on Droid Rollers customs.',
   sheetTitle: DEFAULT_SHEET_TITLE,
   sheetBlurb: DEFAULT_SHEET_BLURB,
@@ -258,6 +282,32 @@ function mapAddons(items: ApiItem[]): LiveAddons {
   };
 }
 
+function mapGroups(raw: unknown): LiveGroupMeta[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  const groups: LiveGroupMeta[] = [];
+  const seen = new Set<string>();
+  for (const row of raw) {
+    if (!row || typeof row !== 'object') {
+      continue;
+    }
+
+    const item = row as Record<string, unknown>;
+    const id = typeof item.id === 'string' ? item.id.trim() : '';
+    const label = typeof item.label === 'string' ? item.label.trim() : '';
+    if (!id || seen.has(id)) {
+      continue;
+    }
+
+    seen.add(id);
+    groups.push({id, label: label || id});
+  }
+
+  return groups;
+}
+
 function mapPrices(payload: {
   postageNote?: string;
   sheetTitle?: string;
@@ -265,6 +315,7 @@ function mapPrices(payload: {
   sheetFooter?: string;
   updatedAt?: string;
   items?: ApiItem[];
+  groups?: unknown;
 }): LivePrices {
   const items = Array.isArray(payload.items) ? payload.items : [];
 
@@ -309,6 +360,7 @@ function mapPrices(payload: {
         priceGbp: row.priceGbp!,
       })),
     items: mappedItems,
+    groups: mapGroups(payload.groups),
     addons: mapAddons(items),
   };
 }
@@ -340,6 +392,53 @@ export function liveGroup(group: string): LiveItem[] {
   return [...cache.items]
     .filter(row => row.group === group)
     .sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+export function menuGroupLabel(id: string): string {
+  const fromApi = cache.groups.find(row => row.id === id);
+  if (fromApi?.label) {
+    return fromApi.label;
+  }
+
+  return id.replace(/[-_]+/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase()) || id;
+}
+
+/** Desk sections that are not already on Core / Look / Mods. */
+export function extraMenuGroups(): Array<{id: string; label: string; items: LiveItem[]}> {
+  const order = cache.groups.length > 0
+    ? cache.groups.map(row => row.id)
+    : [...new Set(cache.items.map(row => row.group))];
+  const result: Array<{id: string; label: string; items: LiveItem[]}> = [];
+  const seen = new Set<string>();
+  for (const id of order) {
+    if (KNOWN_SHEET_GROUPS.has(id) || seen.has(id)) {
+      continue;
+    }
+
+    const items = liveGroup(id);
+    if (items.length === 0) {
+      continue;
+    }
+
+    seen.add(id);
+    result.push({id, label: menuGroupLabel(id), items});
+  }
+
+  for (const item of cache.items) {
+    if (KNOWN_SHEET_GROUPS.has(item.group) || seen.has(item.group)) {
+      continue;
+    }
+
+    const items = liveGroup(item.group);
+    if (items.length === 0) {
+      continue;
+    }
+
+    seen.add(item.group);
+    result.push({id: item.group, label: menuGroupLabel(item.group), items});
+  }
+
+  return result;
 }
 
 /**
@@ -414,6 +513,7 @@ export async function refreshLivePrices(): Promise<LivePrices> {
         sheetFooter?: string;
         updatedAt?: string;
         items?: ApiItem[];
+        groups?: unknown;
       };
       cache = mapPrices(payload);
       return cache;

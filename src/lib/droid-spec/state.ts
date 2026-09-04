@@ -1,7 +1,7 @@
-import {defaultBoard, defaultBuild, itemLabel} from './menu.js';
+import {defaultBoard, defaultBuild, extraMenuGroups, itemLabel} from './menu.js';
 
 export type PhotoKind = 'shell' | 'faces' | 'backs' | 'other';
-export type SpecPage = 'core' | 'look' | 'mods' | 'bb' | 'photos';
+export type SpecPage = 'core' | 'look' | 'mods' | 'bb' | 'photos' | `xg:${string}`;
 export type BbSide = 'Left' | 'Right';
 
 export interface SpecPhoto {
@@ -36,6 +36,7 @@ export interface DroidSpec {
   bbSlots: BbSlot[];
   photos: SpecPhoto[];
   extras: string[];
+  extraPicks: Record<string, string>;
   startMessageId: string;
 }
 
@@ -74,6 +75,7 @@ export function emptySpec(): DroidSpec {
     bbSlots: [],
     photos: [],
     extras: [],
+    extraPicks: {},
     startMessageId: '',
   };
 }
@@ -89,6 +91,10 @@ export function getSpec(channelId: string): DroidSpec {
 
   if (!Array.isArray(spec.extras)) {
     spec.extras = [];
+  }
+
+  if (!spec.extraPicks || typeof spec.extraPicks !== 'object') {
+    spec.extraPicks = {};
   }
 
   return spec;
@@ -317,6 +323,13 @@ export function specText(spec: DroidSpec): string {
 
   if (spec.extras.length > 0) {
     lines.push(`**Extras:** ${spec.extras.map(id => itemLabel(id)).join(', ')}`);
+  }
+
+  for (const group of extraMenuGroups()) {
+    const pick = spec.extraPicks[group.id];
+    if (pick) {
+      lines.push(`**${group.label}:** ${itemLabel(pick)}`);
+    }
   }
 
   if (spec.photos.length > 0) {

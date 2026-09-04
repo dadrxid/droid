@@ -8,7 +8,7 @@ import {DATA_DIR} from '../../services/config.js';
  * lives in memory only. Spec: DroidFix repo docs/DROID-TICKETS-SPEC.md
  */
 
-export type TicketKind = 'custom' | 'repair';
+export type TicketKind = string;
 export type TicketStatus = 'open' | 'closed' | 'deleted';
 
 export type TicketField = {
@@ -45,7 +45,7 @@ export type GuildTicketSettings = {
   panelChannelId: string;
   panelMessageId: string;
   panelStamp: string;
-  counters: {custom: number; repair: number};
+  counters: Record<string, number>;
 };
 
 type TicketState = {
@@ -68,7 +68,7 @@ function emptySettings(): GuildTicketSettings {
     panelChannelId: '',
     panelMessageId: '',
     panelStamp: '',
-    counters: {custom: 0, repair: 0},
+    counters: {},
   };
 }
 
@@ -92,10 +92,11 @@ function coerce(raw: unknown): TicketState {
       panelChannelId: typeof entry.panelChannelId === 'string' ? entry.panelChannelId : '',
       panelMessageId: typeof entry.panelMessageId === 'string' ? entry.panelMessageId : '',
       panelStamp: typeof entry.panelStamp === 'string' ? entry.panelStamp : '',
-      counters: {
-        custom: typeof counters.custom === 'number' ? counters.custom : 0,
-        repair: typeof counters.repair === 'number' ? counters.repair : 0,
-      },
+      counters: Object.fromEntries(
+        Object.entries(counters)
+          .filter((entry): entry is [string, number] => typeof entry[1] === 'number' && Number.isFinite(entry[1]))
+          .map(([key, value]) => [key, Math.max(0, Math.floor(value))]),
+      ),
     };
   }
 
@@ -193,7 +194,7 @@ export async function saveSettings(
 export async function nextTicketNumber(guildId: string, kind: TicketKind): Promise<number> {
   const current = await load();
   const settings = current.guilds[guildId] ?? emptySettings();
-  settings.counters[kind] += 1;
+  settings.counters[kind] = (settings.counters[kind] ?? 0) + 1;
   current.guilds[guildId] = settings;
   await persist();
   return settings.counters[kind];

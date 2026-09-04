@@ -1,5 +1,8 @@
 import {SlashCommandBuilder} from '@discordjs/builders';
 import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
   ChannelType,
   PermissionFlagsBits,
   type ButtonInteraction,
@@ -12,7 +15,7 @@ import {injectable} from 'inversify';
 import Command from './index.js';
 import {requireGuildAdministrator} from '../utils/require-guild-admin.js';
 import {postSpecStarter} from '../lib/droid-spec/wizard.js';
-import {readTicketForm, ticketModal} from '../lib/droid-tickets/forms.js';
+import {formPages, readTicketFormPage, ticketModal, ticketType} from '../lib/droid-tickets/forms.js';
 import {
   closeTicket,
   createTicket,
@@ -22,7 +25,12 @@ import {
   staffCanManage,
   userTag,
 } from '../lib/droid-tickets/service.js';
-import {siteSyncEnabled, fetchTicketGates, ticketKindClosedNote, ticketKindOpen} from '../lib/droid-tickets/site.js';
+import {
+  siteSyncEnabled,
+  fetchTicketPanel,
+  ticketKindClosedNote,
+  ticketKindOpen,
+} from '../lib/droid-tickets/site.js';
 import {
   editPanelMessage,
   findExistingPanel,
@@ -42,22 +50,38 @@ import {
 import {
   closeConfirmRow,
   deleteConfirmRow,
+  kindLabel,
 } from '../lib/droid-tickets/ui.js';
+
+type PendingForm = {kind: TicketKind; page: number; fields: TicketRecord['fields']; expiresAt: number};
+const pendingForms = new Map<string, PendingForm>();
+const FORM_TTL_MS = 15 * 60 * 1000;
+
+function prunePendingForms(): void {
+  const now = Date.now();
+  for (const [key, row] of pendingForms) {
+    if (row.expiresAt <= now) {
+      pendingForms.delete(key);
+    }
+  }
+}
 
 /** One ticket per member per kind, and a short cooldown so buttons cannot be spammed. */
 const OPEN_COOLDOWN_MS = 20_000;
 const lastOpen = new Map<string, number>();
 
 function ticketKindFromCustomId(customId: string): TicketKind | undefined {
-  if (customId.endsWith(':custom')) {
-    return 'custom';
+  const match = /^(?:dt:new:|dt:form-next:|dt:form:)([a-z][a-z0-9-]{0,20})(?::|$)/.exec(customId);
+  return match?.[1];
+}
+
+function formPageFromCustomId(customId: string): number {
+  const match = /^(?:dt:form|dt:form-next):[a-z][a-z0-9-]{0,20}:(\d+)$/.exec(customId);
+  if (!match) {
+    return 0;
   }
 
-  if (customId.endsWith(':repair')) {
-    return 'repair';
-  }
-
-  return undefined;
+  return Number.parseInt(match[1], 10) || 0;
 }
 
 @injectable()
@@ -166,12 +190,15 @@ export default class implements Command {
   }
 
   async handleButtonInteraction(interaction: ButtonInteraction): Promise<void> {
-    const kind = interaction.customId.startsWith('dt:new:')
-      ? ticketKindFromCustomId(interaction.customId)
-      : undefined;
+    const kind = ticketKindFromCustomId(interaction.customId);
 
-    if (kind) {
+    if (kind && interaction.customId.startsWith('dt:new:')) {
       await this.openForm(interaction, kind);
+      return;
+    }
+
+    if (kind && interaction.customId.startsWith('dt:form-next:')) {
+      await interaction.showModal(ticketModal(kind, formPageFromCustomId(interaction.customId)) as never);
       return;
     }
 
@@ -231,9 +258,9 @@ export default class implements Command {
 
     await interaction.deferReply({ephemeral: true});
 
-    const gates = await fetchTicketGates();
-    if (!ticketKindOpen(kind, gates)) {
-      await interaction.editReply(ticketKindClosedNote(kind, gates));
+    const panel = await fetchTicketPanel();
+    if (!ticketKindOpen(kind, panel)) {
+      await interaction.editReply(ticketKindClosedNote(kind, panel));
       return;
     }
 
@@ -246,7 +273,7 @@ export default class implements Command {
     const existing = await openTicketFor(interaction.guild.id, member.id, kind);
     if (existing && interaction.guild.channels.cache.has(existing.channelId)) {
       await interaction.editReply(
-        `You already have an open ${kind === 'custom' ? 'custom build' : 'repair'} ticket: <#${existing.channelId}>. Use that one.`,
+        `You already have an open ${kindLabel(kind, panel)} ticket: <#${existing.channelId}>. Use that one.`,
       );
       return;
     }
@@ -255,13 +282,37 @@ export default class implements Command {
       await patchTicket(existing.channelId, {status: 'deleted'});
     }
 
-    const fields = readTicketForm(kind, id => {
+    const page = formPageFromCustomId(interaction.customId);
+    const pageFields = readTicketFormPage(kind, page, id => {
       try {
         return interaction.fields.getTextInputValue(id);
       } catch {
         return '';
       }
     });
+    prunePendingForms();
+    const pendingKey = `${interaction.guild.id}:${member.id}:${kind}`;
+    const previous = page === 0 ? [] : (pendingForms.get(pendingKey)?.fields ?? []);
+    const fields = [...previous, ...pageFields];
+    const type = ticketType(kind);
+    const pages = type ? formPages(type) : [];
+    if (page + 1 < pages.length) {
+      pendingForms.set(pendingKey, {kind, page: page + 1, fields, expiresAt: Date.now() + FORM_TTL_MS});
+      await interaction.editReply({
+        content: 'More questions on the next page.',
+        components: [
+          new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder()
+              .setCustomId(`dt:form-next:${kind}:${String(page + 1)}`)
+              .setLabel('Continue')
+              .setStyle(ButtonStyle.Primary),
+          ),
+        ],
+      } as never);
+      return;
+    }
+
+    pendingForms.delete(pendingKey);
 
     const result = await createTicket({guild: interaction.guild, opener: member, kind, fields});
     if (!result.ok) {
@@ -269,7 +320,7 @@ export default class implements Command {
       return;
     }
 
-    if (kind === 'custom') {
+    if (type?.orderBuilderEnabled) {
       await postSpecStarter(result.channel).catch((error: unknown) => {
         console.warn('Could not post the build sheet:', error);
       });
@@ -363,8 +414,8 @@ export default class implements Command {
       return;
     }
 
-    const gates = await fetchTicketGates();
-    const payload = panelPayload(interaction.guild, gates);
+    const panel = await fetchTicketPanel();
+    const payload = panelPayload(interaction.guild, panel);
 
     const existing = target.type === ChannelType.GuildText
       ? await findExistingPanel(target)
@@ -372,17 +423,17 @@ export default class implements Command {
 
     try {
       if (existing) {
-        await editPanelMessage(existing, gates);
+        await editPanelMessage(existing, panel);
         await rememberPanel(interaction.guildId ?? '', existing.channelId, existing.id);
         await interaction.reply({
-          content: `Panel updated in <#${target.id}>. Desk Open/Closed will keep this message in line. No need to delete it.`,
+          content: `Panel updated in <#${target.id}>. Staff desk edits will keep this message in line. No need to delete it.`,
           ephemeral: true,
         });
         return;
       }
 
       const posted = await target.send(payload);
-      await rememberPanel(interaction.guildId ?? '', posted.channelId, posted.id, livePanelStamp(gates));
+      await rememberPanel(interaction.guildId ?? '', posted.channelId, posted.id, livePanelStamp(panel));
     } catch {
       await interaction.reply({
         content: `I cannot post in <#${target.id}>. Give me View Channel, Send Messages and Embed Links there.`,
@@ -392,7 +443,7 @@ export default class implements Command {
     }
 
     await interaction.reply({
-      content: `Panel posted in <#${target.id}>. Desk Open/Closed will update this message. Do not delete it.`,
+      content: `Panel posted in <#${target.id}>. Staff desk edits will update this message. Do not delete it.`,
       ephemeral: true,
     });
   }
@@ -408,7 +459,7 @@ export default class implements Command {
         settings.logChannelId ? `Log channel: <#${settings.logChannelId}>` : 'Log channel: not set',
         settings.archiveCategoryId ? `Archive: <#${settings.archiveCategoryId}>` : 'Archive: not set',
         settings.panelChannelId ? `Panel: <#${settings.panelChannelId}>` : 'Panel: not tracked yet. Run /droid-tickets panel once, or press a ticket button.',
-        `Numbers so far: custom ${String(settings.counters.custom)}, repair ${String(settings.counters.repair)}`,
+        `Numbers so far: ${Object.entries(settings.counters).map(([key, value]) => `${key} ${String(value)}`).join(', ') || 'none'}`,
         `Website sync: ${siteSyncEnabled() ? 'on' : 'off'}`,
       ].join('\n'),
     });
@@ -487,9 +538,9 @@ export default class implements Command {
       return;
     }
 
-    const [existing, gates] = await Promise.all([
+    const [existing, panel] = await Promise.all([
       openTicketFor(interaction.guild.id, interaction.user.id, kind),
-      fetchTicketGates(),
+      fetchTicketPanel(),
     ]);
     if (interaction.channelId) {
       void rememberPanel(interaction.guild.id, interaction.channelId, interaction.message.id);
@@ -503,10 +554,10 @@ export default class implements Command {
       return;
     }
 
-    if (!ticketKindOpen(kind, gates)) {
-      await editPanelMessage(interaction.message, gates).catch(() => undefined);
+    if (!ticketKindOpen(kind, panel)) {
+      await editPanelMessage(interaction.message, panel).catch(() => undefined);
       await interaction.reply({
-        content: ticketKindClosedNote(kind, gates),
+        content: ticketKindClosedNote(kind, panel),
         ephemeral: true,
       });
       return;

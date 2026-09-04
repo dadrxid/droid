@@ -6,62 +6,104 @@ import {
 } from 'discord.js';
 import {branded} from '../droid-brand.js';
 import type {TicketField, TicketKind, TicketRecord} from './store.js';
+import type {TicketPanel, TicketPanelType} from './site.js';
 
 export const BRAND_BLUE = 0x0088ff;
 const CLOSED_AMBER = 0xffb020;
 
-export const KIND_LABELS: Record<TicketKind, string> = {
+const STYLE: Record<TicketPanelType['buttonStyle'], ButtonStyle> = {
+  primary: ButtonStyle.Primary,
+  secondary: ButtonStyle.Secondary,
+  success: ButtonStyle.Success,
+  danger: ButtonStyle.Danger,
+};
+
+export function kindLabel(kind: TicketKind, panel?: TicketPanel): string {
+  const type = panel?.types.find(row => row.id === kind);
+  if (type?.label) {
+    return type.label;
+  }
+
+  if (kind === 'repair') {
+    return 'Repair';
+  }
+
+  if (kind === 'custom') {
+    return 'Custom build';
+  }
+
+  return kind.replace(/[-_]+/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase()) || 'Ticket';
+}
+
+export const KIND_LABELS: Record<string, string> = {
   custom: 'Custom build',
   repair: 'Repair',
 };
 
-export function panelEmbed(
-  emoji: string,
-  logo?: string,
-  gates?: {customOpen: boolean; repairOpen: boolean; customClosedNote: string; repairClosedNote: string},
-): EmbedBuilder {
-  const customLine = gates && !gates.customOpen
-    ? '**Custom build** · closed until HeliumStrike. Press the button for why.'
-    : '**Custom build** · instant price on your spec. Built and shipped in house, 4 to 6 weeks.';
-  const repairLine = gates && !gates.repairOpen
-    ? '**Repair** · closed right now. Press the button for why.'
-    : '**Repair** · stick drift, dead buttons, charging, or an 8K board swap on a pad you already own. UK mail-in only.';
+function parseColor(raw: string): number {
+  const hex = raw.trim().replace('#', '');
+  if (!/^[0-9a-fA-F]{6}$/.test(hex)) {
+    return BRAND_BLUE;
+  }
 
-  const closed = Boolean(gates && (!gates.customOpen || !gates.repairOpen));
-  const embed = new EmbedBuilder()
-    .setColor(closed ? CLOSED_AMBER : BRAND_BLUE)
-    .setTitle(branded(emoji, 'DroidFix tickets'))
-    .setDescription([
-      'Pick a button and fill in the short form. Your private ticket opens straight after.',
-      '',
-      customLine,
-      repairLine,
-    ].join('\n'))
-    .setFooter({text: 'droidfix.uk · only you and the DroidFix team can see your ticket'});
-
-  return logo ? embed.setThumbnail(logo) : embed;
+  return Number.parseInt(hex, 16);
 }
 
-export function panelRows(
-  emoji: string,
-  gates?: {customOpen: boolean; repairOpen: boolean},
-): any[] {
-  const customOpen = gates ? gates.customOpen : true;
-  const repairOpen = gates ? gates.repairOpen : true;
-  return [
-    new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId('dt:new:custom')
-        .setLabel(customOpen ? 'Custom build' : 'Custom build · closed')
-        .setEmoji(emoji ? emoji : '🎮')
-        .setStyle(customOpen ? ButtonStyle.Primary : ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId('dt:new:repair')
-        .setLabel(repairOpen ? 'Repair' : 'Repair · closed')
-        .setEmoji('🛠️')
-        .setStyle(ButtonStyle.Secondary),
-    ),
-  ];
+function buttonLabel(type: TicketPanelType): string {
+  if (type.accepting) {
+    return type.buttonLabel.slice(0, 80);
+  }
+
+  const suffix = ' · closed';
+  return `${type.buttonLabel.slice(0, Math.max(1, 80 - suffix.length))}${suffix}`;
+}
+
+export function panelEmbed(emoji: string, panel: TicketPanel): EmbedBuilder {
+  const closed = panel.types.some(row => row.enabled && !row.accepting);
+  const look = panel.panel;
+  const lines = look.description
+    ? [look.description]
+    : ['Pick a button and fill in the short form. Your private ticket opens straight after.'];
+  const embed = new EmbedBuilder()
+    .setColor(closed ? CLOSED_AMBER : parseColor(look.color))
+    .setTitle(branded(emoji, look.title || 'DroidFix tickets'))
+    .setDescription(lines.join('\n').slice(0, 4096))
+    .setFooter({text: (look.footer || 'droidfix.uk · only you and the DroidFix team can see your ticket').slice(0, 2048)});
+
+  if (look.thumbnailUrl) {
+    embed.setThumbnail(look.thumbnailUrl);
+  }
+
+  if (look.imageUrl) {
+    embed.setImage(look.imageUrl);
+  }
+
+  return embed;
+}
+
+export function panelRows(emoji: string, panel: TicketPanel): any[] {
+  const types = panel.types.filter(row => row.enabled).slice(0, 10);
+  const rows: Array<ActionRowBuilder<ButtonBuilder>> = [];
+  for (let index = 0; index < types.length; index += 5) {
+    const chunk = types.slice(index, index + 5);
+    const row = new ActionRowBuilder<ButtonBuilder>();
+    for (const type of chunk) {
+      const button = new ButtonBuilder()
+        .setCustomId(`dt:new:${type.id}`)
+        .setLabel(buttonLabel(type))
+        .setStyle(type.accepting ? STYLE[type.buttonStyle] : ButtonStyle.Secondary);
+      const mark = type.buttonEmoji || (type.id === 'custom' ? emoji : '');
+      if (mark) {
+        button.setEmoji(mark);
+      }
+
+      row.addComponents(button);
+    }
+
+    rows.push(row);
+  }
+
+  return rows;
 }
 
 /** One tidy embed: greeting, the ground rules for that ticket type, and the form answers. */
@@ -73,30 +115,42 @@ export function welcomeEmbed(options: {
   fields: TicketField[];
   emoji: string;
   logo?: string;
+  title?: string;
+  body?: string;
+  footer?: string;
 }): EmbedBuilder {
   const {kind, id, openerId, staffRoleId, fields, emoji, logo} = options;
   const staff = staffRoleId ? `<@&${staffRoleId}>` : 'Andrew';
-
-  const lines = kind === 'custom'
+  const fallback = kind === 'custom'
     ? [
       `Thanks <@${openerId}>. Pick your parts on the build sheet below and the price updates as you go.`,
       '',
       'Built and shipped in house · 4 to 6 weeks, sometimes sooner · UK postage included.',
       `${staff} will send the checkout link and can sort anything else in here.`,
     ]
-    : [
-      `Thanks <@${openerId}>. Post a photo or a short clip of the fault when you can.`,
-      '',
-      'UK mail-in only.',
-      'Already own a custom pad, a Scuf or another modder\'s build? An 8K board swap is welcome here.',
-      `${staff} will send you the postage details and price it up in here.`,
-    ];
+    : kind === 'repair'
+      ? [
+        `Thanks <@${openerId}>. Post a photo or a short clip of the fault when you can.`,
+        '',
+        'UK mail-in only.',
+        'Already own a custom pad, a Scuf or another modder\'s build? An 8K board swap is welcome here.',
+        `${staff} will send you the postage details and price it up in here.`,
+      ]
+      : [
+        `Thanks <@${openerId}>.`,
+        '',
+        `${staff} will pick this up in here.`,
+      ];
+
+  const body = options.body?.trim()
+    ? [`Thanks <@${openerId}>.`, '', options.body.trim(), '', `${staff} will pick this up in here.`]
+    : fallback;
 
   const embed = new EmbedBuilder()
     .setColor(BRAND_BLUE)
-    .setTitle(branded(emoji, `${KIND_LABELS[kind]} · ${id}`))
-    .setDescription(lines.join('\n'))
-    .setFooter({text: 'droidfix.uk · press Close when you are finished'});
+    .setTitle(branded(emoji, `${options.title ? options.title : kindLabel(kind)} · ${id}`))
+    .setDescription(body.join('\n').slice(0, 4096))
+    .setFooter({text: (options.footer ? options.footer : 'droidfix.uk · press Close when you are finished').slice(0, 2048)});
 
   for (const field of fields) {
     embed.addFields({
@@ -195,7 +249,7 @@ export function logEmbed(ticket: TicketRecord, extra: {users: string[]}): EmbedB
     .addFields(
       {name: 'Ticket owner', value: ticket.openerId ? `<@${ticket.openerId}>` : 'unknown', inline: true},
       {name: 'Ticket name', value: ticket.channelName || ticket.id, inline: true},
-      {name: 'Type', value: KIND_LABELS[ticket.kind], inline: true},
+      {name: 'Type', value: kindLabel(ticket.kind), inline: true},
       {name: 'Messages', value: String(ticket.messageCount), inline: true},
       {
         name: 'Closed by',

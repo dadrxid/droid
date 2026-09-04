@@ -12,8 +12,10 @@ import {
   buildItems,
   defaultBoard,
   defaultBuild,
+  extraMenuGroups,
   liveGroup,
   livePrices,
+  menuGroupLabel,
   type LiveItem,
 } from './menu.js';
 import {
@@ -230,17 +232,29 @@ function extrasRow(spec: DroidSpec): ActionRowBuilder<StringSelectMenuBuilder> |
   return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu);
 }
 
+export function extraPageId(groupId: string): SpecPage {
+  return `xg:${groupId}`;
+}
+
+export function extraGroupFromPage(page: string): string | undefined {
+  return page.startsWith('xg:') ? page.slice(3) : undefined;
+}
+
 export function pageOrder(spec: DroidSpec): SpecPage[] {
   const pages: SpecPage[] = ['core', 'look', 'mods'];
   if (isBb(spec)) {
     pages.push('bb');
   }
 
+  for (const group of extraMenuGroups()) {
+    pages.push(extraPageId(group.id));
+  }
+
   pages.push('photos');
   return pages;
 }
 
-const PAGE_TITLES: Record<SpecPage, string> = {
+const PAGE_TITLES: Record<'core' | 'look' | 'mods' | 'bb' | 'photos', string> = {
   core: 'Board and sticks',
   look: 'Shells, caps and face buttons',
   mods: 'Clicky buttons, back buttons, shoulders',
@@ -251,9 +265,12 @@ const PAGE_TITLES: Record<SpecPage, string> = {
 function stepMeta(spec: DroidSpec): {step: number; total: number; title: string} {
   const pages = pageOrder(spec);
   const index = pages.indexOf(spec.page);
-  const title = spec.page === 'core' && showsBuildPicker()
-    ? 'Build type, board and sticks'
-    : PAGE_TITLES[spec.page];
+  const extraId = extraGroupFromPage(spec.page);
+  const title = extraId
+    ? menuGroupLabel(extraId)
+    : spec.page === 'core' && showsBuildPicker()
+      ? 'Build type, board and sticks'
+      : (PAGE_TITLES[spec.page as keyof typeof PAGE_TITLES] ?? 'More options');
   return {
     step: index === -1 ? 1 : index + 1,
     total: pages.length,
@@ -566,6 +583,23 @@ function photoRows(spec: DroidSpec): any[] {
   ];
 }
 
+function extraRows(spec: DroidSpec): any[] {
+  const groupId = extraGroupFromPage(spec.page);
+  const group = extraMenuGroups().find(row => row.id === groupId);
+  if (!group) {
+    return withNav(spec, []);
+  }
+
+  return withNav(spec, [
+    groupRow(
+      `xg:${group.id}`,
+      group.label,
+      group.items.map(item => toOpt(item)),
+      spec.extraPicks[group.id] ?? '',
+    ),
+  ]);
+}
+
 export function wizardRows(spec: DroidSpec): any[] {
   if (spec.page === 'look') {
     return lookRows(spec);
@@ -581,6 +615,10 @@ export function wizardRows(spec: DroidSpec): any[] {
 
   if (spec.page === 'photos') {
     return photoRows(spec);
+  }
+
+  if (extraGroupFromPage(spec.page)) {
+    return extraRows(spec);
   }
 
   return coreRows(spec);

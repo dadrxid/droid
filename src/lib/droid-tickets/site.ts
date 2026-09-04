@@ -263,6 +263,48 @@ export type TicketGates = {
   repairClosedNote: string;
 };
 
+export type TicketFormField = {
+  id: string;
+  label: string;
+  placeholder: string;
+  paragraph: boolean;
+  required: boolean;
+  maxLength: number;
+};
+
+export type TicketPanelType = {
+  id: string;
+  label: string;
+  buttonLabel: string;
+  buttonEmoji: string;
+  buttonStyle: 'primary' | 'secondary' | 'success' | 'danger';
+  enabled: boolean;
+  accepting: boolean;
+  closedNote: string;
+  prefix: string;
+  formTitle: string;
+  formFields: TicketFormField[];
+  welcomeTitle: string;
+  welcomeBody: string;
+  welcomeFooter: string;
+  orderBuilderEnabled: boolean;
+};
+
+export type TicketPanelLook = {
+  title: string;
+  description: string;
+  color: string;
+  thumbnailUrl: string;
+  footer: string;
+  imageUrl: string;
+};
+
+export type TicketPanel = {
+  updatedAt: string;
+  panel: TicketPanelLook;
+  types: TicketPanelType[];
+};
+
 const DEFAULT_GATES: TicketGates = {
   customOpen: false,
   repairOpen: true,
@@ -272,48 +314,276 @@ const DEFAULT_GATES: TicketGates = {
     'Repair tickets are closed right now. Custom builds may still be open. Try again later or ask in Discord.',
 };
 
-let cachedGates: TicketGates = DEFAULT_GATES;
-let gatesFetched = false;
+function defaultPanel(): TicketPanel {
+  return {
+    updatedAt: '',
+    panel: {
+      title: 'DroidFix tickets',
+      description: 'Pick a button and fill in the short form. Your private ticket opens straight after.',
+      color: '#0088ff',
+      thumbnailUrl: panelThumbnailUrl(),
+      footer: 'droidfix.uk · only you and the DroidFix team can see your ticket',
+      imageUrl: '',
+    },
+    types: [
+      {
+        id: 'custom',
+        label: 'Custom build',
+        buttonLabel: 'Custom build',
+        buttonEmoji: '',
+        buttonStyle: 'primary',
+        enabled: true,
+        accepting: false,
+        closedNote: DEFAULT_GATES.customClosedNote,
+        prefix: 'custom',
+        formTitle: 'Custom build request',
+        formFields: [
+          {
+            id: 'country',
+            label: 'Which country are you in?',
+            placeholder: 'e.g. UK, Ireland, Germany',
+            paragraph: false,
+            required: true,
+            maxLength: 60,
+          },
+        ],
+        welcomeTitle: '',
+        welcomeBody: 'Pick your parts on the build sheet below and the price updates as you go.\n\nBuilt and shipped in house · 4 to 6 weeks, sometimes sooner · UK postage included.',
+        welcomeFooter: '',
+        orderBuilderEnabled: true,
+      },
+      {
+        id: 'repair',
+        label: 'Repair',
+        buttonLabel: 'Repair',
+        buttonEmoji: '🛠️',
+        buttonStyle: 'secondary',
+        enabled: true,
+        accepting: true,
+        closedNote: DEFAULT_GATES.repairClosedNote,
+        prefix: 'repair',
+        formTitle: 'Repair request',
+        formFields: [
+          {
+            id: 'model',
+            label: 'Which controller is it?',
+            placeholder: 'e.g. PS5 DualSense, PS4 DualShock, Scuf, Xbox',
+            paragraph: false,
+            required: true,
+            maxLength: 100,
+          },
+          {
+            id: 'fault',
+            label: 'What is it doing? Or what do you want?',
+            placeholder: 'e.g. left stick drifts, R2 not clicking, 8K board swap on a pad you already own',
+            paragraph: true,
+            required: true,
+            maxLength: 900,
+          },
+          {
+            id: 'tried',
+            label: 'When did it start? Tried anything?',
+            placeholder: 'e.g. started last month, reset and new cable',
+            paragraph: true,
+            required: false,
+            maxLength: 500,
+          },
+          {
+            id: 'where',
+            label: 'UK postcode area for return postage',
+            placeholder: 'e.g. TS1. UK mail-in only',
+            paragraph: false,
+            required: true,
+            maxLength: 60,
+          },
+          {
+            id: 'order',
+            label: 'Order number if you have one',
+            placeholder: 'From your DroidFix confirmation email',
+            paragraph: false,
+            required: false,
+            maxLength: 60,
+          },
+        ],
+        welcomeTitle: '',
+        welcomeBody: 'Post a photo or a short clip of the fault when you can.\n\nUK mail-in only.\nAlready own a custom pad, a Scuf or another modder\'s build? An 8K board swap is welcome here.',
+        welcomeFooter: '',
+        orderBuilderEnabled: false,
+      },
+    ],
+  };
+}
 
-function asGates(raw: unknown): TicketGates | undefined {
+let cachedPanel: TicketPanel = defaultPanel();
+let panelFetched = false;
+
+function asText(value: unknown, max: number, fallback = ''): string {
+  return typeof value === 'string' ? value.trim().slice(0, max) || fallback : fallback;
+}
+
+function asPanel(raw: unknown): TicketPanel | undefined {
   if (!raw || typeof raw !== 'object') {
     return undefined;
   }
 
   const data = raw as Record<string, unknown>;
-  const customNote = typeof data.customClosedNote === 'string' ? data.customClosedNote.trim() : '';
-  const repairNote = typeof data.repairClosedNote === 'string' ? data.repairClosedNote.trim() : '';
+  const look = data.panel && typeof data.panel === 'object' ? data.panel as Record<string, unknown> : {};
+  const incoming = Array.isArray(data.types) ? data.types : [];
+  const types: TicketPanelType[] = [];
+  for (const row of incoming) {
+    if (!row || typeof row !== 'object') {
+      continue;
+    }
+
+    const item = row as Record<string, unknown>;
+    const id = asText(item.id, 21).toLowerCase();
+    if (!/^[a-z][a-z0-9-]{0,20}$/.test(id)) {
+      continue;
+    }
+
+    const fieldsRaw = Array.isArray(item.formFields) ? item.formFields : [];
+    const formFields: TicketFormField[] = [];
+    for (const field of fieldsRaw) {
+      if (!field || typeof field !== 'object') {
+        continue;
+      }
+
+      const entry = field as Record<string, unknown>;
+      const fieldId = asText(entry.id, 32).toLowerCase();
+      const label = asText(entry.label, 45);
+      if (!fieldId || !label) {
+        continue;
+      }
+
+      formFields.push({
+        id: fieldId,
+        label,
+        placeholder: asText(entry.placeholder, 100),
+        paragraph: entry.paragraph === true,
+        required: entry.required !== false,
+        maxLength: typeof entry.maxLength === 'number' && Number.isFinite(entry.maxLength)
+          ? Math.min(4000, Math.max(1, Math.floor(entry.maxLength)))
+          : 100,
+      });
+    }
+
+    const style = item.buttonStyle;
+    types.push({
+      id,
+      label: asText(item.label, 80, id),
+      buttonLabel: asText(item.buttonLabel, 80, asText(item.label, 80, id)),
+      buttonEmoji: asText(item.buttonEmoji, 64),
+      buttonStyle: style === 'secondary' || style === 'success' || style === 'danger' ? style : 'primary',
+      enabled: item.enabled !== false,
+      accepting: item.accepting !== false,
+      closedNote: asText(item.closedNote, 400, `${asText(item.label, 80, id)} tickets are closed right now.`),
+      prefix: asText(item.prefix, 16, id).toLowerCase(),
+      formTitle: asText(item.formTitle, 45, `${asText(item.label, 80, id)} request`),
+      formFields,
+      welcomeTitle: asText(item.welcomeTitle, 256),
+      welcomeBody: asText(item.welcomeBody, 2000),
+      welcomeFooter: asText(item.welcomeFooter, 2048),
+      orderBuilderEnabled: item.orderBuilderEnabled === true || (item.orderBuilderEnabled !== false && id === 'custom'),
+    });
+  }
+
+  if (types.length === 0) {
+    return undefined;
+  }
+
   return {
-    customOpen: data.customOpen === true,
-    repairOpen: data.repairOpen !== false,
-    customClosedNote: customNote.length > 0 ? customNote : DEFAULT_GATES.customClosedNote,
-    repairClosedNote: repairNote.length > 0 ? repairNote : DEFAULT_GATES.repairClosedNote,
+    updatedAt: asText(data.updatedAt, 40),
+    panel: {
+      title: asText(look.title, 256, 'DroidFix tickets'),
+      description: asText(look.description, 4000, defaultPanel().panel.description),
+      color: asText(look.color, 16, '#0088ff'),
+      thumbnailUrl: asText(look.thumbnailUrl, 500, panelThumbnailUrl()),
+      footer: asText(look.footer, 2048, defaultPanel().panel.footer),
+      imageUrl: asText(look.imageUrl, 500),
+    },
+    types: types.slice(0, 10),
+  };
+}
+
+function gatesFromPanel(panel: TicketPanel): TicketGates {
+  const custom = panelTypeById(panel, 'custom');
+  const repair = panelTypeById(panel, 'repair');
+  return {
+    customOpen: Boolean(custom?.enabled && custom.accepting),
+    repairOpen: repair ? Boolean(repair.enabled && repair.accepting) : true,
+    customClosedNote: custom?.closedNote ? custom.closedNote : DEFAULT_GATES.customClosedNote,
+    repairClosedNote: repair?.closedNote ? repair.closedNote : DEFAULT_GATES.repairClosedNote,
   };
 }
 
 /** True after at least one successful read from droidfix.uk. */
 export function ticketGatesLive(): boolean {
-  return gatesFetched;
+  return panelFetched;
 }
 
-/** Staff desk ticket locks. Cached so Discord still works if the site blips. */
-export async function fetchTicketGates(): Promise<TicketGates> {
-  const payload = await getJson('/api/bot/ticket-gates', 2500);
-  const next = asGates(payload);
+export function cachedTicketPanel(): TicketPanel {
+  return cachedPanel;
+}
+
+export function panelTypeById(panel: TicketPanel, id: string): TicketPanelType | undefined {
+  return panel.types.find(row => row.id === id);
+}
+
+export function enabledPanelTypes(panel: TicketPanel): TicketPanelType[] {
+  return panel.types.filter(row => row.enabled);
+}
+
+/** Staff desk panel. Cached so Discord still works if the site blips. */
+export async function fetchTicketPanel(): Promise<TicketPanel> {
+  const payload = await getJson('/api/bot/ticket-panel', 2500);
+  const next = asPanel(payload);
   if (next) {
-    cachedGates = next;
-    gatesFetched = true;
+    cachedPanel = next;
+    panelFetched = true;
   }
 
-  return cachedGates;
+  return cachedPanel;
 }
 
-export function ticketKindOpen(kind: 'custom' | 'repair', gates: TicketGates): boolean {
-  return kind === 'custom' ? gates.customOpen : gates.repairOpen;
+export async function fetchTicketGates(): Promise<TicketGates> {
+  const panel = await fetchTicketPanel();
+  if (panelFetched) {
+    return gatesFromPanel(panel);
+  }
+
+  const payload = await getJson('/api/bot/ticket-gates', 2500);
+  if (payload && typeof payload === 'object') {
+    const data = payload as Record<string, unknown>;
+    panelFetched = true;
+    return {
+      customOpen: data.customOpen === true,
+      repairOpen: data.repairOpen !== false,
+      customClosedNote: asText(data.customClosedNote, 400, DEFAULT_GATES.customClosedNote),
+      repairClosedNote: asText(data.repairClosedNote, 400, DEFAULT_GATES.repairClosedNote),
+    };
+  }
+
+  return gatesFromPanel(cachedPanel);
 }
 
-export function ticketKindClosedNote(kind: 'custom' | 'repair', gates: TicketGates): string {
-  return kind === 'custom' ? gates.customClosedNote : gates.repairClosedNote;
+export function ticketKindOpen(kind: string, panel: TicketPanel): boolean {
+  const type = panelTypeById(panel, kind);
+  return Boolean(type?.enabled && type.accepting);
+}
+
+export function ticketKindClosedNote(kind: string, panel: TicketPanel): string {
+  const type = panelTypeById(panel, kind);
+  return type?.closedNote ? type.closedNote : 'Tickets are closed right now. Try again later or ask in Discord.';
+}
+
+export function ticketPanelStamp(panel: TicketPanel): string {
+  return [
+    panel.updatedAt,
+    panel.panel.title,
+    panel.panel.description,
+    panel.panel.color,
+    ...panel.types.map(row => [row.id, row.enabled ? '1' : '0', row.accepting ? '1' : '0', row.buttonLabel, row.closedNote].join(':')),
+  ].join('|');
 }
 
 export function ticketGateStamp(gates: TicketGates): string {

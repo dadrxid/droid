@@ -194,6 +194,7 @@ function specLines(spec: DroidSpec): Array<QuoteLine | null> {
     backsLine(spec),
     lineFor(spec.shoulders),
     ...spec.extras.map(id => lineFor(id)),
+    ...Object.values(spec.extraPicks ?? {}).map(id => lineFor(id)),
   ];
 }
 

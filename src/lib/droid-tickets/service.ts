@@ -9,7 +9,7 @@ import {
 } from 'discord.js';
 import {isBotOwner} from '../../utils/require-guild-admin.js';
 import {buildTranscript} from './transcript.js';
-import {pushTicket, pushTranscript} from './site.js';
+import {cachedTicketPanel, panelTypeById, pushTicket, pushTranscript} from './site.js';
 import {
   getSettings,
   nextTicketNumber,
@@ -23,7 +23,7 @@ import {
 } from './store.js';
 import {brandEmoji, brandLogo} from '../droid-brand.js';
 import {
-  KIND_LABELS,
+  kindLabel,
   closedEmbed,
   directLinkRow,
   logEmbed,
@@ -52,7 +52,7 @@ export function staffCanManage(member: GuildMember, settings: GuildTicketSetting
 }
 
 export function isTicketChannelName(name: string): boolean {
-  return /^(custom|repair|closed)-\d{4}$/.test(name);
+  return /^(closed|[a-z][a-z0-9-]{0,20})-\d{4}$/.test(name);
 }
 
 function categoryIsFull(guild: Guild, categoryId: string): boolean {
@@ -98,8 +98,10 @@ export async function createTicket(options: {
     return {ok: false, reason: 'The ticket category is full (50 channels). Andrew needs to clear some closed tickets.'};
   }
 
-  const number = await nextTicketNumber(guild.id, kind);
-  const id = ticketId(kind, number);
+  const type = panelTypeById(cachedTicketPanel(), kind);
+  const prefix = type?.prefix ? type.prefix : kind;
+  const number = await nextTicketNumber(guild.id, prefix);
+  const id = ticketId(prefix, number);
   const openerTag = userTag(opener.user);
 
   const overwrites = [
@@ -152,7 +154,7 @@ export async function createTicket(options: {
       name: id,
       type: ChannelType.GuildText,
       parent: settings.categoryId,
-      topic: `${KIND_LABELS[kind]} ticket · ${openerTag} (${opener.id}) · ${id}`,
+      topic: `${kindLabel(kind, cachedTicketPanel())} ticket · ${openerTag} (${opener.id}) · ${id}`,
       reason: `Ticket ${id} opened by ${openerTag}`,
       permissionOverwrites: overwrites,
     });
@@ -194,6 +196,9 @@ export async function createTicket(options: {
       fields,
       emoji: brandEmoji(guild),
       logo: brandLogo(guild),
+      title: panelTypeById(cachedTicketPanel(), kind)?.welcomeTitle,
+      body: panelTypeById(cachedTicketPanel(), kind)?.welcomeBody,
+      footer: panelTypeById(cachedTicketPanel(), kind)?.welcomeFooter,
     })],
     components: [openControlsRow()],
     allowedMentions: {

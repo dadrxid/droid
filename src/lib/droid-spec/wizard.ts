@@ -294,6 +294,17 @@ export async function handleSpecSelect(interaction: StringSelectMenuInteraction)
   }
 
   await refreshLivePrices();
+  if (interaction.customId.startsWith('droidspec:xg:')) {
+    const groupId = interaction.customId.slice('droidspec:xg:'.length);
+    const value = interaction.values[0] ?? '';
+    if (groupId && value) {
+      spec.extraPicks[groupId] = value;
+    }
+
+    await showWizard(interaction, spec);
+    return;
+  }
+
   const apply = SELECT_HANDLERS[interaction.customId];
   if (apply) {
     apply(spec, interaction.values[0] ?? '', interaction.values);
@@ -448,7 +459,7 @@ export async function handleSpecButton(interaction: ButtonInteraction): Promise<
         click: spec.click,
         shoulders: spec.shoulders,
         bbCount: spec.bbCount,
-        extras: spec.extras,
+        extras: [...spec.extras, ...Object.values(spec.extraPicks ?? {}).filter(Boolean)],
         shellNote: spec.shellNote,
         facesNote: spec.facesNote,
       },
